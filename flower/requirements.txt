@@ -1,0 +1,14 @@
+astroid==1.4.7
+backports.functools-lru-cache==1.2.1
+colorama==0.3.7
+configparser==3.5.0
+isort==4.2.5
+lazy-object-proxy==1.2.2
+mccabe==0.5.0
+numpy==1.11.1
+Pint==0.7.2
+pylint==1.6.1
+six==1.10.0
+tsp==0.0.1
+virtualenv==15.0.2
+wrapt==1.10.8
