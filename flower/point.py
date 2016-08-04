@@ -1,10 +1,8 @@
+import math
 from operator import methodcaller
 
-import math
-import random
 
 class Vec2(object):
-
     def __init__(self, x, y):
         self.x = float(x)
         self.y = float(y)
@@ -36,13 +34,13 @@ class Vec2(object):
         return Vec2(x, y)
 
     def polar_angle(self, origin=None):
-        
+
         if origin:
             orig = origin
         else:
             orig = Vec2(0, 0)
 
-        new_vec = self - origin
+        new_vec = self - orig
         new_vec_theta = math.atan2(new_vec.y, new_vec.x)
 
         return new_vec_theta
@@ -56,15 +54,17 @@ class Vec2(object):
         length = math.hypot(self.x, self.y)
         return length
 
+
 def direction(p0, p1, p2):
     cp = (p2 - p0) ^ (p1 - p0)
     return cp
 
+
 def sort_polar(points, start):
-    
     if start in points:
         points.remove(start)
 
+    # noinspection PyArgumentList
     s_points = sorted(points, key=methodcaller('polar_angle', origin=start))
     n_points = list()
 
@@ -84,13 +84,13 @@ def sort_polar(points, start):
             current_dist = start.distance(point)
             if last_dist < current_dist:
                 n_points.pop()
-        
+
         n_points.append(point)
 
     return n_points
 
-def graham_scan(points):
 
+def graham_scan(points):
     hull = list()
 
     #
@@ -112,14 +112,14 @@ def graham_scan(points):
     hull.append(sorted_points[1])
     hull.append(sorted_points[2])
 
-    for i in range (3, len(sorted_points)):
+    for i in range(3, len(sorted_points)):
         pi = sorted_points[i]
 
         turn = direction(hull[-2:][0], hull[-1:][0], pi)
         while turn > 0.0:
             hull.pop()
             turn = direction(hull[-2:][0], hull[-1:][0], pi)
-        
+
         hull.append(pi)
 
     hull.append(lowest)

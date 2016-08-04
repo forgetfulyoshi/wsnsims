@@ -7,9 +7,11 @@ import math
 import constants
 import point
 
+
 class WorldPositionMixin(point.Vec2):
     def __init__(self):
         super(WorldPositionMixin, self).__init__(0, 0)
+
 
 class GridPositionMixin(object):
     """Describes a position on the grid"""
@@ -45,19 +47,24 @@ class GridPositionMixin(object):
         dist = max(abs(self.row - other.row), abs(self.col - other.col))
         return dist
 
+
 class Cell(WorldPositionMixin, GridPositionMixin):
     """ Defines a cell in the grid """
 
-    side_len = constants.COMMUNICATION_RANGE / math.sqrt(2)    
+    side_len = constants.COMMUNICATION_RANGE / math.sqrt(2)
+
     def __init__(self):
+        super(Cell, self).__init__()
         self.neighbors = list()
         self.access = 0
         self.onehop = 0
         self.prox = 0
         self.segments = list()
 
+
 class Grid(object):
     """ Define the simulation grid """
+
     def __init__(self, width, hieght):
         self.width = width
         self.hieght = hieght
@@ -90,7 +97,7 @@ class Grid(object):
         # Initialize the grid with empty cells
         #
         self._grid = [[Cell() for _ in range(self.cols)] for _ in range(self.rows)]
-        
+
         #
         # Now go back over the grid and do basic cell initialization
         #
@@ -114,9 +121,10 @@ class Grid(object):
         """ Given a row and col, return the actual Cell object """
         return self._grid[row][col]
 
-    def cell_position(self, row, col):
+    @staticmethod
+    def cell_position(row, col):
         """ Given a row and col, calulate the physical position of a cell """
-        
+
         x_coord = col * Cell.side_len + (Cell.side_len / 2.0)
         y_coord = row * Cell.side_len + (Cell.side_len / 2.0)
         return point.Vec2(x_coord, y_coord)
@@ -124,18 +132,18 @@ class Grid(object):
     def on_grid(self, (row, col)):
         if 0 > row or row >= self.rows:
             return False
-        
+
         if 0 > col or col >= self.cols:
             return False
-        
-        return True 
+
+        return True
 
     def cell_neighbors(self, row, col):
 
         #
         # First, generate the set of possible coordinates
         #        
-        possible_coords = itertools.product([row-1, row, row+1], [col-1, col, col+1])
+        possible_coords = itertools.product([row - 1, row, row + 1], [col - 1, col, col + 1])
 
         #
         # Now, filter out all coordinates not on the grid
@@ -155,5 +163,5 @@ class Grid(object):
         neighbors = [self.cell(row, col) for row, col in neighbors]
         return neighbors
 
-    def G(self):
-        return self.cell(self.rows/2, self.cols/2)
+    def center(self):
+        return self.cell(self.rows / 2, self.cols / 2)

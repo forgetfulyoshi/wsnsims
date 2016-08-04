@@ -1,26 +1,25 @@
 """Main FLOWER simulation logic"""
 
 import logging
-import math
 import random
 
 import matplotlib.pyplot as plt
 
-from grid import Grid
-from grid import Cell
-from grid import WorldPositionMixin
 import constants
 import point
+from grid import Grid
+from grid import WorldPositionMixin
 
 logging.basicConfig(level=logging.DEBUG)
+
 
 class Cluster(object):
     def __init__(self):
         self.is_center = False
         self.segments = list()
 
+
 class VirtualCluster(object):
-    
     def __init__(self, central=False):
         self.is_center = central
         self.cells = list()
@@ -28,31 +27,30 @@ class VirtualCluster(object):
 
         self._hull = list()
         self._interior = list()
-    
-    def calculate_tour(self):
 
+    def calculate_tour(self):
         hull, interior = point.graham_scan(self.cells)
-        
+
         self._hull = hull
         self._interior = interior
 
         return self._hull
 
     def tour_length(self):
-
         last = self._hull[0]
         distance = 0
         for cell in self._hull[1:]:
             distance += last.distance(cell)
             last = cell
-        
+
         return distance
 
-class Segment(WorldPositionMixin):
 
+class Segment(WorldPositionMixin):
     count = 0
 
     def __init__(self, x, y):
+        super(Segment, self).__init__()
         self.cluster = None
         self.x = x
         self.y = y
@@ -71,6 +69,7 @@ class Segment(WorldPositionMixin):
     def __repr__(self):
         return "SEG %d" % self.segment_id
 
+
 class Simulation(object):
     def __init__(self):
 
@@ -82,6 +81,7 @@ class Simulation(object):
         self.clusters = list()
         self.center = (0, 0)
         self.grid = Grid(1700, 1100)
+        self.cells = list()
 
     def init_segments(self):
 
@@ -90,7 +90,7 @@ class Simulation(object):
             y_pos = random.random() * self.grid.hieght
             segment = Segment(x_pos, y_pos)
             self.segments.append(segment)
-            
+
             print "Created segment: %s" % segment
 
     def init_cells(self):
@@ -114,7 +114,7 @@ class Simulation(object):
             # Calculate the cell's proximaty as it's cell distance from
             # the center of the "damaged area."
             #
-            cell.prox = cell.cell_distance(self.grid.G())
+            cell.prox = cell.cell_distance(self.grid.center())
 
         #
         # Calculate the number of one-hop segments within range of each cell
@@ -156,11 +156,11 @@ class Simulation(object):
                     continue
 
                 elif pot_candidate_union == pot_cell_union:
-                
+
                     if candidate.access < cell.access:
                         candidate = cell
                         continue
-                    
+
                     if candidate.onehop < cell.onehop:
                         candidate = cell
                         continue
@@ -177,7 +177,7 @@ class Simulation(object):
         #
         logging.info("Length of cover: %d", len(cell_cover))
 
-        #for cell in cell_cover:
+        # for cell in cell_cover:
         #    print cell.grid_pos.row, cell.grid_pos.col, cell.access
 
         x = list()
@@ -200,10 +200,10 @@ class Simulation(object):
         self.cells = cell_cover
 
     def phase_one(self):
-        
+
         vcs = list()
         central_cluster = VirtualCluster(central=True)
-        central_cluster.cells = [self.grid.G()]
+        central_cluster.cells = [self.grid.center()]
         vcs.append(central_cluster)
 
         for cell in self.cells:
@@ -215,12 +215,12 @@ class Simulation(object):
             logging.info("Tour: %s", vc.calculate_tour())
             logging.info("Tour length: %f", vc.tour_length())
 
+
 def main():
     sim = Simulation()
     sim.init_segments()
     sim.init_cells()
     sim.phase_one()
-
 
 
 if __name__ == '__main__':
