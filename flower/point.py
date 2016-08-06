@@ -23,6 +23,10 @@ class Vec2(object):
         y = self.y + other.y
         return Vec2(x, y)
 
+    def __mul__(self, other):
+        dot = self.x * other.x + self.y * other.y
+        return dot
+
     def __xor__(self, other):
         cross = self.x * other.y - other.x * self.y
         return cross
@@ -59,6 +63,11 @@ class Vec2(object):
         length = math.hypot(self.x, self.y)
         return length
 
+    def set_length(self, length):
+        v = self.normalized()
+        self.x = v.x * length
+        self.y = v.y * length
+        return self
 
 def direction(p0, p1, p2):
     cp = (p2 - p0) ^ (p1 - p0)

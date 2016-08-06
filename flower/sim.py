@@ -91,7 +91,7 @@ class Simulation(object):
             segment = Segment(x_pos, y_pos)
             self.segments.append(segment)
 
-            print "Created segment: %s" % segment
+            logging.info("Created segment: %s", segment)
 
     def init_cells(self):
 
@@ -195,7 +195,6 @@ class Simulation(object):
             y.append(cell.y)
 
         plt.plot(x, y, 'ro')
-        plt.show()
 
         self.cells = cell_cover
 
@@ -221,6 +220,7 @@ def main():
     sim.init_segments()
     sim.init_cells()
     sim.phase_one()
+    plt.show()
 
 
 if __name__ == '__main__':
