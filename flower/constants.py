@@ -10,3 +10,6 @@ ALPHA = math.pow(10, -7)  # * ureg.joule / uregeter
 DELTA = 2
 BETA = math.pow(10, -10)  # * ureg.joule / uregeter ** DELTA
 HOLD_TIME = 1.0  # * ureg.second
+MDC_COUNT = 5
+SEGMENT_COUNT = 18
+DAMAGE_RADIUS = 200

@@ -52,14 +52,27 @@ class Cell(WorldPositionMixin, GridPositionMixin):
     """ Defines a cell in the grid """
 
     side_len = constants.COMMUNICATION_RANGE / math.sqrt(2)
+    count = 1
 
-    def __init__(self):
-        super(Cell, self).__init__()
+    def __init__(self, x=0.0, y=0.0):
+        WorldPositionMixin.__init__(self)
+        GridPositionMixin.__init__(self)
         self.neighbors = list()
         self.access = 0
         self.onehop = 0
         self.prox = 0
         self.segments = list()
+        self.collection_point = None
+        self._cell_id = Cell.count
+        self.x = x
+        self.y = y
+        Cell.count += 1
+
+    def __str__(self):
+        return "Cell %d (%f, %f)" % (self._cell_id, self.x, self.y)
+
+    def __repr__(self):
+        return "Cell %d" % (self._cell_id,)
 
 
 class Grid(object):

@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 
 import constants
 import point
+import tour
 from grid import Grid
 from grid import WorldPositionMixin
 
@@ -19,31 +20,55 @@ class Cluster(object):
         self.segments = list()
 
 
-class VirtualCluster(object):
-    def __init__(self, central=False):
-        self.is_center = central
-        self.cells = list()
+class VirtualCluster(WorldPositionMixin):
+    def __init__(self, central_cell):
+        super(VirtualCluster, self).__init__()
+
         self.vcid = 0
 
-        self._hull = list()
-        self._interior = list()
+        self._cells = list()
+        self._tour = list()
+        self._tour_length = 0
+        self._central_cell = central_cell
 
-    def calculate_tour(self):
-        hull, interior = point.graham_scan(self.cells)
+    def _calculate_tour(self):
+        cells = list(set(self._cells + [self._central_cell]))
+        self._tour = tour.find_tour(cells, radius=0, start=self._central_cell)
+        self._tour_length = tour.tour_length(self._tour)
 
-        self._hull = hull
-        self._interior = interior
+    def _calculate_location(self):
+        com = tour.centroid(self._cells + [self._central_cell])
+        self.x = com.x
+        self.y = com.y
 
-        return self._hull
+    def update(self):
+        self._calculate_tour()
+        self._calculate_location()
 
+    @property
     def tour_length(self):
-        last = self._hull[0]
-        distance = 0
-        for cell in self._hull[1:]:
-            distance += last.distance(cell)
-            last = cell
+        return self._tour_length
 
-        return distance
+    @property
+    def cells(self):
+        return self._cells
+
+    @cells.setter
+    def cells(self, value):
+        self._cells = value
+        self.update()
+
+    def append(self, *args):
+        self._cells.append(args)
+        self.update()
+
+    def tour(self):
+        return [c.collection_point for c in self._tour]
+
+    def __add__(self, other):
+        new_vc = VirtualCluster(self._central_cell)
+        new_vc.cells = list(set(self.cells + other.cells))
+        return new_vc
 
 
 class Segment(WorldPositionMixin):
@@ -73,25 +98,27 @@ class Segment(WorldPositionMixin):
 class Simulation(object):
     def __init__(self):
 
-        self.segment_count = 18
         self.segments = list()
-        self.mobile_nodes = list()
-        self.trips = list()
-        self.data_sets = list()
-        self.clusters = list()
-        self.center = (0, 0)
         self.grid = Grid(1700, 1100)
-        self.cells = list()
+        self.segment_cover = list()
+        self.damaged = self.grid.center()
 
     def init_segments(self):
 
-        for _ in range(self.segment_count):
+        while len(self.segments) < constants.SEGMENT_COUNT:
             x_pos = random.random() * self.grid.width
             y_pos = random.random() * self.grid.hieght
+
+            dist_from_center = (point.Vec2(x_pos, y_pos) - self.damaged).length()
+            if dist_from_center < constants.DAMAGE_RADIUS:
+                continue
+
             segment = Segment(x_pos, y_pos)
             self.segments.append(segment)
 
-            logging.info("Created segment: %s", segment)
+            # logging.info("Created segment: %s (%f)", segment, dist_from_center)
+            plot(self.segments, 'rx')
+            scatter([self.damaged], constants.DAMAGE_RADIUS)
 
     def init_cells(self):
 
@@ -111,10 +138,10 @@ class Simulation(object):
             cell.access = len(cell.segments)
 
             #
-            # Calculate the cell's proximaty as it's cell distance from
+            # Calculate the cell's proximity as it's cell distance from
             # the center of the "damaged area."
             #
-            cell.prox = cell.cell_distance(self.grid.center())
+            cell.prox = cell.cell_distance(self.damaged)
 
         #
         # Calculate the number of one-hop segments within range of each cell
@@ -130,12 +157,12 @@ class Simulation(object):
         cell_cover = set()
 
         #
-        # Get a representation of the cells sorted by access in decending order
+        # Get a representation of the cells sorted by access in descending order
         #
         cells = list(self.grid.cells())
 
         while segment_cover != set(self.segments):
-            logging.debug("Current segment cover: %s", segment_cover)
+            # logging.debug("Current segment cover: %s", segment_cover)
 
             candidate = None
             for cell in cells:
@@ -177,42 +204,70 @@ class Simulation(object):
         #
         logging.info("Length of cover: %d", len(cell_cover))
 
-        # for cell in cell_cover:
-        #    print cell.grid_pos.row, cell.grid_pos.col, cell.access
-
-        x = list()
-        y = list()
-        for segment in self.segments:
-            x.append(segment.x)
-            y.append(segment.y)
-
-        plt.plot(x, y, 'bo')
-
-        x = list()
-        y = list()
-        for cell in cell_cover:
-            x.append(cell.x)
-            y.append(cell.y)
-
-        plt.plot(x, y, 'ro')
-
-        self.cells = cell_cover
+        self.segment_cover = cell_cover
+        # plot(self.segment_cover, 'bo')
 
     def phase_one(self):
 
         vcs = list()
-        central_cluster = VirtualCluster(central=True)
-        central_cluster.cells = [self.grid.center()]
-        vcs.append(central_cluster)
+        central_cell = self.damaged
+        vck = VirtualCluster(central_cell)
+        vck.cells = [central_cell]
 
-        for cell in self.cells:
-            vc = VirtualCluster()
-            vc.cells.append(cell)
+        for cell in self.segment_cover:
+            vc = VirtualCluster(central_cell)
+            vc.cells = [cell]
             vcs.append(vc)
 
+        while len(vcs) > constants.MDC_COUNT:
+            logging.info("Current VCs: %r", vcs)
+            vcs = combine_vcs(vcs, vck)
+
         for vc in vcs:
-            logging.info("Tour: %s", vc.calculate_tour())
-            logging.info("Tour length: %f", vc.tour_length())
+            plot(vc.tour())
+
+        scatter(self.segment_cover, constants.COMMUNICATION_RANGE)
+        plot(vcs, 'bx')
+        scatter([central_cell], constants.COMMUNICATION_RANGE)
+        plt.show()
+
+
+def combine_vcs(vcs, center):
+    index = 0
+    decorated = list()
+    for vci in vcs:
+        for vcj in vcs[vcs.index(vci) + 1:]:
+            combination_cost = (vci + vcj + center).tour_length - (vci + center).tour_length
+            decorated.append((combination_cost, index, vci, vcj))
+            index += 1
+
+    decorated.sort()
+    cost, _, vci, vcj = decorated[0]
+    logging.info("Combining %s and %s (%f)", vci, vcj, cost)
+
+    new_vcs = list(vcs)
+    new_vc = vci + vcj
+    new_vcs.remove(vci)
+    new_vcs.remove(vcj)
+    new_vcs.append(new_vc)
+    return new_vcs
+
+
+def plot(points, *args, **kwargs):
+    x = [p.x for p in points]
+    y = [p.y for p in points]
+    plt.plot(x, y, *args, **kwargs)
+
+
+def scatter(points, radius):
+    plot(points, 'ro')
+
+    axes = plt.axes()
+    for p in points:
+        circle = plt.Circle((p.x, p.y), radius=radius, alpha=0.5)
+        axes.add_patch(circle)
+
+    plt.axis('scaled')
 
 
 def main():

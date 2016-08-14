@@ -5,10 +5,13 @@ import matplotlib.pyplot as plt
 
 import point
 
-logging.basicConfig(level=logging.DEBUG)
+
+class TourError(Exception):
+    pass
 
 
-def tour_length(points):
+def tour_length(cells):
+    points = [cell.collection_point for cell in cells]
     tour_len = 0
     last = points[0]
     for p in points[1:]:
@@ -33,10 +36,13 @@ def two_body_tour(s1, s2, radius):
     p1 += s1
     p2 += s2
 
-    return [p1, p2, p1]
+    s1.collection_point = p1
+    s2.collection_point = p2
+
+    return [s1, s2]
 
 
-def center_of_mass(segments):
+def centroid(segments):
     x = 0
     y = 0
     for segment in segments:
@@ -58,29 +64,49 @@ def perpendicular_to_line(start, end, p):
     a = start
     x = a + d.set_length((p - a) * d)
 
-    perp = x - p
+    perp = p - x
     return perp
 
 
-def gt_two_body_tour(segments, radius):
-    hull, interior = point.graham_scan(segments)
-    com = center_of_mass(hull)
+def find_tour(segments, radius=0, start=None):
+    if len(segments) < 1:
+        raise TourError("Must have at least one cell to compute tour")
+
+    if len(segments) == 1:
+        tour = segments
+    elif len(segments) == 2:
+        tour = two_body_tour(segments[0], segments[1], radius)
+    else:
+        tour = gt_two_body_tour(segments, radius)
+
+    if start and len(segments) > 1:
+        tour = point.rotate_to_start(tour, start)
+        tour.append(start)
+    else:
+        if len(segments) > 1:
+            tour.append(tour[0])
+
+    return tour
+
+
+def gt_two_body_tour(cells, radius):
+    hull, interior = point.graham_scan(cells)
+    com = centroid(hull)
 
     # Compute collection points for segments along
     # the hull.
-    collection_points = list()
-    for segment in hull:
-        v = com - segment
+    for cell in hull:
+        v = com - cell
         v.set_length(radius)
-        v += segment
-        collection_points.append(v)
+        v += cell
+        cell.collection_point = v
 
     # Compute collection points for segments in the interior
-    for segment in interior:
+    for cell in interior:
         closest = None
         last = hull[0]
         for h in hull[1:]:
-            perp = perpendicular_to_line(last, h, segment)
+            perp = perpendicular_to_line(last, h, cell)
             last = h
 
             if not closest:
@@ -91,42 +117,15 @@ def gt_two_body_tour(segments, radius):
                 closest = perp
 
         closest.set_length(radius)
-        collection_points.append(segment + closest)
+        cell.collection_point = cell + closest
 
-    x = [p.x for p in hull]
-    y = [p.y for p in hull]
-    plt.plot(x, y, 'ro')
-
-    x = [p.x for p in interior]
-    y = [p.y for p in interior]
-    plt.plot(x, y, 'ro')
-
-    tour = point.sort_polar(collection_points, collection_points[0])
-    tour.append(collection_points[0])
-    x = [p.x for p in tour]
-    y = [p.y for p in tour]
-    plt.plot(x, y, 'b-')
-
-    plt.plot([com.x], [com.y], 'go')
-
+    tour = point.sort_polar(cells, field='collection_point')
     return tour
 
 
-class TourError(Exception):
-    pass
-
-
-def find_tour(segments, radius):
-    if len(segments < 2):
-        raise TourError("Must have two or more segments to compute tour")
-
-    if len(segments) == 2:
-        return two_body_tour(segments[0], segments[1], radius)
-
-    return gt_two_body_tour(segments, radius)
-
-
 def main():
+    logging.basicConfig(level=logging.DEBUG)
+
     # s1 = point.Vec2(2, 8)
     # s2 = point.Vec2(10, 3)
     radius = 2

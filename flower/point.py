@@ -1,4 +1,6 @@
+import collections
 import math
+from operator import attrgetter
 from operator import methodcaller
 
 
@@ -32,6 +34,9 @@ class Vec2(object):
         return cross
 
     def normalized(self, origin=None):
+        if not self.length():
+            return Vec2(0, 0)
+
         if not origin:
             x = self.x / self.length()
             y = self.y / self.length()
@@ -43,6 +48,8 @@ class Vec2(object):
         return Vec2(x, y)
 
     def polar_angle(self, origin=None):
+        if origin == self:
+            return 0.0
 
         if origin:
             orig = origin
@@ -69,59 +76,40 @@ class Vec2(object):
         self.y = v.y * length
         return self
 
+
 def direction(p0, p1, p2):
     cp = (p2 - p0) ^ (p1 - p0)
     return cp
 
 
-def sort_polar(points, start):
-    if start in points:
-        points.remove(start)
+def sort_polar(points, field=None):
+    if not field:
+        lowest = min(points, key=attrgetter('y', 'x'))
+        # noinspection PyArgumentList
+        sorted_points = sorted(points, key=methodcaller('polar_angle', origin=lowest))
+    else:
+        lowest = min(points, key=attrgetter(field + '.y', field + '.x'))
+        decorated = [(getattr(p, field).polar_angle(origin=getattr(lowest, field)), i, p) for i, p in enumerate(points)]
+        decorated.sort()
+        sorted_points = [p for _, _, p in decorated]
 
-    # noinspection PyArgumentList
-    s_points = sorted(points, key=methodcaller('polar_angle', origin=start))
-    n_points = list()
+    return sorted_points
 
-    n_points.append(start)
-    for point in s_points:
 
-        if point == start:
-            continue
-
-        last = n_points[-1:][0]
-
-        last_cp = start ^ last
-        current_cp = start ^ point
-
-        if current_cp == last_cp:
-            last_dist = start.distance(last)
-            current_dist = start.distance(point)
-            if last_dist < current_dist:
-                n_points.pop()
-
-        n_points.append(point)
-
-    return n_points
+def rotate_to_start(points, new_start):
+    d = collections.deque(points)
+    start_index = points.index(new_start)
+    d.rotate(start_index * -1)
+    rotated_points = list(d)
+    return rotated_points
 
 
 def graham_scan(points):
+    my_points = list(points)
+
+    sorted_points = sort_polar(my_points)
+
     hull = list()
-
-    #
-    # Find the point with the minimum y-coordinate
-    #
-    lowest = points[0]
-    for p in points:
-        if lowest.y > p.y:
-            lowest = p
-
-    #
-    # Don't want to re-refernce the starting point
-    #
-    points.remove(lowest)
-
-    sorted_points = sort_polar(points, lowest)
-
     hull.append(sorted_points[0])
     hull.append(sorted_points[1])
     hull.append(sorted_points[2])
@@ -136,6 +124,5 @@ def graham_scan(points):
 
         hull.append(pi)
 
-    hull.append(lowest)
     interior = list(set(sorted_points).difference(hull))
     return hull, interior
