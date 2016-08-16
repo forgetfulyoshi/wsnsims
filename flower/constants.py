@@ -13,3 +13,6 @@ HOLD_TIME = 1.0  # * ureg.second
 MDC_COUNT = 5
 SEGMENT_COUNT = 18
 DAMAGE_RADIUS = 200
+NOT_CLUSTERED = -1
+ISDVA = 10  # * ureg.mbit
+ISDVSD = 0

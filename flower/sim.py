@@ -5,103 +5,46 @@ import random
 
 import matplotlib.pyplot as plt
 
+import cluster
 import constants
+import grid
+import mobile
 import point
-import tour
-from grid import Grid
-from grid import WorldPositionMixin
+import segment
 
 logging.basicConfig(level=logging.DEBUG)
-
-
-class Cluster(object):
-    def __init__(self):
-        self.is_center = False
-        self.segments = list()
-
-
-class VirtualCluster(WorldPositionMixin):
-    def __init__(self, central_cell):
-        super(VirtualCluster, self).__init__()
-
-        self.vcid = 0
-
-        self._cells = list()
-        self._tour = list()
-        self._tour_length = 0
-        self._central_cell = central_cell
-
-    def _calculate_tour(self):
-        cells = list(set(self._cells + [self._central_cell]))
-        self._tour = tour.find_tour(cells, radius=0, start=self._central_cell)
-        self._tour_length = tour.tour_length(self._tour)
-
-    def _calculate_location(self):
-        com = tour.centroid(self._cells + [self._central_cell])
-        self.x = com.x
-        self.y = com.y
-
-    def update(self):
-        self._calculate_tour()
-        self._calculate_location()
-
-    @property
-    def tour_length(self):
-        return self._tour_length
-
-    @property
-    def cells(self):
-        return self._cells
-
-    @cells.setter
-    def cells(self, value):
-        self._cells = value
-        self.update()
-
-    def append(self, *args):
-        self._cells.append(args)
-        self.update()
-
-    def tour(self):
-        return [c.collection_point for c in self._tour]
-
-    def __add__(self, other):
-        new_vc = VirtualCluster(self._central_cell)
-        new_vc.cells = list(set(self.cells + other.cells))
-        return new_vc
-
-
-class Segment(WorldPositionMixin):
-    count = 0
-
-    def __init__(self, x, y):
-        super(Segment, self).__init__()
-        self.cluster = None
-        self.x = x
-        self.y = y
-        self.segment_id = Segment.count
-        Segment.count += 1
-
-    def __eq__(self, other):
-        return self.segment_id == other.segment_id
-
-    def __hash__(self):
-        return hash(self.segment_id)
-
-    def __str__(self):
-        return "SEG %d: (%f, %f)" % (self.segment_id, self.x, self.y)
-
-    def __repr__(self):
-        return "SEG %d" % self.segment_id
 
 
 class Simulation(object):
     def __init__(self):
 
         self.segments = list()
-        self.grid = Grid(1700, 1100)
+        self.grid = grid.Grid(1700, 1100)
         self.segment_cover = list()
         self.damaged = self.grid.center()
+        self.virtual_clusters = list()
+        self.mechanical_energy = 0
+        self.communication_energy = 0
+        self.ISDVA = 10.0
+        self.ISDVSD = 2.0
+        self.mobile_nodes = list()
+
+    def show_state(self):
+        # show all segments
+        plot(self.segments, 'rx')
+
+        # show all cells
+        plot(self.segment_cover, 'bo')
+        scatter(self.segment_cover, constants.COMMUNICATION_RANGE)
+
+        # show all virtual clusters
+        plot(self.virtual_clusters, 'bx')
+
+        # show the MDC tours
+        for vc in self.virtual_clusters:
+            plot(vc.tour())
+
+        plt.show()
 
     def init_segments(self):
 
@@ -113,56 +56,45 @@ class Simulation(object):
             if dist_from_center < constants.DAMAGE_RADIUS:
                 continue
 
-            segment = Segment(x_pos, y_pos)
-            self.segments.append(segment)
+            seg = segment.Segment(x_pos, y_pos)
+            self.segments.append(seg)
 
-            # logging.info("Created segment: %s (%f)", segment, dist_from_center)
-            plot(self.segments, 'rx')
-            scatter([self.damaged], constants.DAMAGE_RADIUS)
+        # Initialize the data for each segment
+        segment.initialize_traffic(self.segments, self.ISDVA, self.ISDVSD)
 
     def init_cells(self):
 
         for cell in self.grid.cells():
-            #
-            # Find all segments within range of the cell
-            #
-            for segment in self.segments:
-                distance = cell.distance(segment)
-                if distance < constants.COMMUNICATION_RANGE:
-                    cell.segments.append(segment)
 
-            #
+            # Find all segments within range of the cell
+            for seg in self.segments:
+                distance = cell.distance(seg)
+                if distance < constants.COMMUNICATION_RANGE:
+                    cell.segments.append(seg)
+
             # Compute the cell's access as simply the length of its
             # set of segments.
-            #
             cell.access = len(cell.segments)
 
-            #
             # Calculate the cell's proximity as it's cell distance from
             # the center of the "damaged area."
-            #
-            cell.prox = cell.cell_distance(self.damaged)
+            cell.proximity = cell.cell_distance(self.damaged)
 
-        #
         # Calculate the number of one-hop segments within range of each cell
-        #
         for cell in self.grid.cells():
             segments = set()
             for nbr in cell.neighbors:
                 segments = set.union(segments, nbr.segments)
 
-            cell.onehop = len(segments)
+            cell.signal_hop_count = len(segments)
 
-        segment_cover = set()  # temporary set to track progress 
+        # Calculate the set cover over the segments
+        segment_cover = set()
         cell_cover = set()
 
-        #
-        # Get a representation of the cells sorted by access in descending order
-        #
         cells = list(self.grid.cells())
 
         while segment_cover != set(self.segments):
-            # logging.debug("Current segment cover: %s", segment_cover)
 
             candidate = None
             for cell in cells:
@@ -188,48 +120,86 @@ class Simulation(object):
                         candidate = cell
                         continue
 
-                    if candidate.onehop < cell.onehop:
+                    if candidate.onehop < cell.signal_hop_count:
                         candidate = cell
                         continue
 
-                    if candidate.prox > cell.prox:
+                    if candidate.prox > cell.proximity:
                         candidate = cell
                         continue
 
             segment_cover.update(candidate.segments)
             cell_cover.add(candidate)
 
-        #
         # Initialized!!
-        #
         logging.info("Length of cover: %d", len(cell_cover))
 
         self.segment_cover = cell_cover
-        # plot(self.segment_cover, 'bo')
 
     def phase_one(self):
 
         vcs = list()
-        central_cell = self.damaged
-        vck = VirtualCluster(central_cell)
-        vck.cells = [central_cell]
 
+        # Get the central cell of the damaged area
+        central_cell = self.damaged
+
+        # Create a virtual cluster containing only the central cell
+        vck = cluster.VirtualCluster(central_cell)
+        vck.cells = [central_cell]
+        central_cell.virtual_cluster_id = constants.MDC_COUNT
+        vck.virtual_cluster_id = constants.MDC_COUNT
+
+        # Create new a virtual cluster for each segment
         for cell in self.segment_cover:
-            vc = VirtualCluster(central_cell)
+            vc = cluster.VirtualCluster(central_cell)
             vc.cells = [cell]
             vcs.append(vc)
 
-        while len(vcs) > constants.MDC_COUNT:
+        # Combine the clusters until we have MDC_COUNT - 1 non-central, virtual
+        # clusters
+        while len(vcs) >= constants.MDC_COUNT:
             logging.info("Current VCs: %r", vcs)
             vcs = combine_vcs(vcs, vck)
 
-        for vc in vcs:
-            plot(vc.tour())
+        # Sort the VCs in polar order and assign an id
+        sorted_vcs = point.sort_polar(vcs)
+        for i, vc in enumerate(sorted_vcs, start=1):
+            vc.virtual_cluster_id = i
 
-        scatter(self.segment_cover, constants.COMMUNICATION_RANGE)
-        plot(vcs, 'bx')
-        scatter([central_cell], constants.COMMUNICATION_RANGE)
-        plt.show()
+            # Assign the virtual cluster ID to each cell in the VC
+            for cell in vc.cells:
+                cell.virtual_cluster_id = i
+
+        # Add the central VC to the end of the list
+        sorted_vcs.append(vck)
+
+        for vc in sorted_vcs:
+            for cell in vc.cells:
+                logging.info("Cell %r is in VC %d", cell, cell.virtual_cluster_id)
+
+        self.virtual_clusters = sorted_vcs
+
+    def compute_total_energy(self):
+        for mdc in self.mobile_nodes:
+            self.mechanical_energy += mdc.motion_energy()
+            self.communication_energy += mdc.communication_energy()
+
+        logging.info("Total motion energy: %f", self.mechanical_energy)
+        logging.info("Total communication energy: %f", self.communication_energy)
+
+    def phase_two(self):
+
+        for vc in self.virtual_clusters:
+            mdc = mobile.MDC(vc)
+            self.mobile_nodes.append(mdc)
+
+        self.compute_total_energy()
+
+    def update_cluster_anchors(self):
+        pass
+
+    def expand_clusters(self):
+        pass
 
 
 def combine_vcs(vcs, center):
@@ -275,7 +245,8 @@ def main():
     sim.init_segments()
     sim.init_cells()
     sim.phase_one()
-    plt.show()
+    sim.phase_two()
+    # sim.show_state()
 
 
 if __name__ == '__main__':

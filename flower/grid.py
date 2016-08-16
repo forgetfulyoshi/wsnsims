@@ -9,8 +9,8 @@ import point
 
 
 class WorldPositionMixin(point.Vec2):
-    def __init__(self):
-        super(WorldPositionMixin, self).__init__(0, 0)
+    def __init__(self, x=0.0, y=0.0):
+        super(WorldPositionMixin, self).__init__(x, y)
 
 
 class GridPositionMixin(object):
@@ -63,9 +63,12 @@ class Cell(WorldPositionMixin, GridPositionMixin):
         self.prox = 0
         self.segments = list()
         self.collection_point = None
-        self._cell_id = Cell.count
         self.x = x
         self.y = y
+        self.virtual_cluster_id = constants.NOT_CLUSTERED
+        self.cluster_id = constants.NOT_CLUSTERED
+
+        self._cell_id = Cell.count
         Cell.count += 1
 
     def __str__(self):
