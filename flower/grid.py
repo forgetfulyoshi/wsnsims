@@ -59,8 +59,8 @@ class Cell(WorldPositionMixin, GridPositionMixin):
         GridPositionMixin.__init__(self)
         self.neighbors = list()
         self.access = 0
-        self.onehop = 0
-        self.prox = 0
+        self.signal_hop_count = 0
+        self.proximity = 0
         self.segments = list()
         self.collection_point = None
         self.x = x
@@ -154,12 +154,12 @@ class Grid(object):
 
         return True
 
-    def cell_neighbors(self, row, col):
+    def cell_neighbors(self, row, col, radius=1):
 
         #
         # First, generate the set of possible coordinates
         #        
-        possible_coords = itertools.product([row - 1, row, row + 1], [col - 1, col, col + 1])
+        possible_coords = itertools.product(range(row - radius, row + radius + 1), range(col - radius, col + radius + 1))
 
         #
         # Now, filter out all coordinates not on the grid

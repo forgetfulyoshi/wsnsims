@@ -3,20 +3,16 @@ import constants
 
 class MDC(object):
     def __init__(self, cluster):
-
         self.cluster = cluster
+        self._cell = None
+        self.moved = False
 
-    def motion_energy(self):
-        cost = constants.MOVEMENT_COST * self.cluster.tour_length
-        return cost
+    @property
+    def cell(self):
+        return self._cell
 
-    def communication_energy(self):
+    @cell.setter
+    def cell(self, value):
+        self.moved = True
+        self._cell = value
 
-        data_volume = 0
-        for cell in self.cluster.cells:
-            for s in cell.segments:
-                data_volume += s.total_data_volume()
-
-        pcr = constants.ALPHA + constants.BETA * pow(constants.COMMUNICATION_RANGE, constants.DELTA)
-        energy = data_volume * pcr
-        return energy
