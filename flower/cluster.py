@@ -1,6 +1,6 @@
-import constants
-import tour
-from grid import WorldPositionMixin
+from flower import constants
+from flower import tour
+from flower.grid import WorldPositionMixin
 
 
 class ClusterMixin(object):

@@ -12,7 +12,7 @@ from flower.tour import tour_length
 class TourTests(unittest.TestCase):
     def test_n_element_tour(self):
         cells = list()
-        for _ in xrange(20):
+        for _ in range(20):
             x = random.randint(1, 1000)
             y = random.randint(1, 1000)
             cell = Cell(x, y)
@@ -53,7 +53,7 @@ class TourTests(unittest.TestCase):
     def test_two_element_tour(self):
 
         cells = list()
-        for _ in xrange(2):
+        for _ in range(2):
             x = random.randint(1, 100)
             y = random.randint(1, 100)
             c = Cell(x, y)
@@ -66,7 +66,7 @@ class TourTests(unittest.TestCase):
 
     def test_two_element_tour_default_start(self):
         cells = list()
-        for _ in xrange(2):
+        for _ in range(2):
             x = random.randint(1, 100)
             y = random.randint(1, 100)
             c = Cell(x, y)

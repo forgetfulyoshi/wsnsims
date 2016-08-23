@@ -89,7 +89,7 @@ class Vec2Tests(unittest.TestCase):
 class ConvexHullTests(unittest.TestCase):
     def test_graham_scan(self):
         points = list()
-        for _ in xrange(1, 50):
+        for _ in range(1, 50):
             x = random.randint(1, 1000)
             y = random.randint(1, 1000)
             p = Vec2(x, y)
@@ -112,7 +112,7 @@ class ConvexHullTests(unittest.TestCase):
 
     def test_graham_scan_multi_start(self):
         points = list()
-        for _ in xrange(1, 50):
+        for _ in range(1, 50):
             x = random.randint(1, 1000)
             y = random.randint(1, 1000)
             p = Vec2(x, y)
@@ -141,7 +141,7 @@ class ConvexHullTests(unittest.TestCase):
 class PolarSortTests(unittest.TestCase):
     def test_sort(self):
         points = [Vec2(0, 0)]
-        for _ in xrange(1, 50):
+        for _ in range(1, 50):
             x = random.randint(1, 1000)
             y = random.randint(1, 1000)
             p = Vec2(x, y)
@@ -157,7 +157,7 @@ class PolarSortTests(unittest.TestCase):
 
     def test_equal_angle(self):
         points = list()
-        for i in xrange(1, 20, 3):
+        for i in range(1, 20, 3):
             x = 2 * i
             y = i
             points.append(Vec2(x, y))
@@ -172,7 +172,7 @@ class PolarSortTests(unittest.TestCase):
         c = Cell()
         c.collection_point = Vec2(0, 0)
         cells = [c]
-        for _ in xrange(1, 50):
+        for _ in range(1, 50):
             x = random.randint(1, 1000)
             y = random.randint(1, 1000)
             cell = Cell()

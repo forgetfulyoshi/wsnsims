@@ -1,6 +1,6 @@
 import random
 
-import grid
+from flower import grid
 
 
 class Segment(grid.WorldPositionMixin):
@@ -23,7 +23,7 @@ class Segment(grid.WorldPositionMixin):
 
     def total_data_volume(self):
         volume = 0
-        for v in self.data.values():
+        for v in list(self.data.values()):
             volume += v
 
         return volume

@@ -6,11 +6,11 @@ import random
 
 import matplotlib.pyplot as plt
 
-import cluster
-import constants
-import grid
-import point
-import segment
+from flower import cluster
+from flower import constants
+from flower import grid
+from flower import point
+from flower import segment
 
 logging.basicConfig(level=logging.DEBUG)
 

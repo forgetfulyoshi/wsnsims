@@ -6,7 +6,7 @@ from flower.segment import initialize_traffic
 
 class SegmentTests(unittest.TestCase):
     def setUp(self):
-        self.segments = [Segment() for _ in xrange(5)]
+        self.segments = [Segment() for _ in range(5)]
 
     def tearDown(self):
         self.segments = None
@@ -32,7 +32,7 @@ class SegmentTests(unittest.TestCase):
 
         for segment in self.segments:
             self.assertEqual(len(self.segments) - 1, len(segment.data))
-            for v in segment.data.values():
+            for v in list(segment.data.values()):
                 self.assertEqual(10, v)
 
     def test_initialize_traffic_invalid(self):

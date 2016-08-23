@@ -4,8 +4,8 @@ import itertools
 import logging
 import math
 
-import constants
-import point
+from flower import constants
+from flower import point
 
 
 class WorldPositionMixin(point.Vec2):
@@ -22,6 +22,9 @@ class GridPositionMixin(object):
 
     def __eq__(self, other):
         return [self.row, self.col] == [other.row, other.col]
+
+    def __hash__(self):
+        return hash((self.row, self.col))
 
     @property
     def row(self):
@@ -139,13 +142,14 @@ class Grid(object):
 
     @staticmethod
     def cell_position(row, col):
-        """ Given a row and col, calulate the physical position of a cell """
+        """ Given a row and col, calculate the physical position of a cell """
 
         x_coord = col * Cell.side_len + (Cell.side_len / 2.0)
         y_coord = row * Cell.side_len + (Cell.side_len / 2.0)
         return point.Vec2(x_coord, y_coord)
 
-    def on_grid(self, (row, col)):
+    def on_grid(self, coordinates):
+        (row, col) = coordinates
         if 0 > row or row >= self.rows:
             return False
 
@@ -159,12 +163,12 @@ class Grid(object):
         #
         # First, generate the set of possible coordinates
         #        
-        possible_coords = itertools.product(range(row - radius, row + radius + 1), range(col - radius, col + radius + 1))
+        possible_coords = itertools.product(list(range(row - radius, row + radius + 1)), list(range(col - radius, col + radius + 1)))
 
         #
         # Now, filter out all coordinates not on the grid
         #
-        neighbors = itertools.ifilter(self.on_grid, possible_coords)
+        neighbors = filter(self.on_grid, possible_coords)
 
         #
         # Remove the original point from the list of neighbors.
@@ -180,4 +184,4 @@ class Grid(object):
         return neighbors
 
     def center(self):
-        return self.cell(self.rows / 2, self.cols / 2)
+        return self.cell(self.rows // 2, self.cols // 2)

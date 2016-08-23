@@ -3,7 +3,7 @@ import random
 
 import matplotlib.pyplot as plt
 
-import point
+from . import point
 
 
 class TourError(Exception):
@@ -135,7 +135,7 @@ def main():
     # logging.info("Tour length: %f", tl)
 
     t = list()
-    for _ in xrange(5):
+    for _ in range(5):
         v = point.Vec2(random.randint(0, 100), random.randint(0, 100))
         t.append(v)
 

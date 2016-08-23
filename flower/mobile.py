@@ -1,6 +1,3 @@
-import constants
-
-
 class MDC(object):
     def __init__(self, cluster):
         self.cluster = cluster
@@ -15,4 +12,3 @@ class MDC(object):
     def cell(self, value):
         self.moved = True
         self._cell = value
-
