@@ -1,5 +1,6 @@
 import logging
 import random
+import statistics
 
 import matplotlib.pyplot as plt
 
@@ -43,14 +44,8 @@ def two_body_tour(s1, s2, radius):
 
 
 def centroid(segments):
-    x = 0
-    y = 0
-    for segment in segments:
-        x += segment.x
-        y += segment.y
-
-    x /= len(segments)
-    y /= len(segments)
+    x = statistics.mean(p.x for p in segments)
+    y = statistics.mean(p.y for p in segments)
 
     return point.Vec2(x, y)
 

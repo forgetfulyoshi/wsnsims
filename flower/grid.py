@@ -75,7 +75,7 @@ class Cell(WorldPositionMixin, GridPositionMixin):
         Cell.count += 1
 
     def __str__(self):
-        return "Cell %d (%f, %f)" % (self._cell_id, self.x, self.y)
+        return "Cell %d (Cluster %d)" % (self._cell_id, self.cluster_id)
 
     def __repr__(self):
         return "Cell %d" % (self._cell_id,)

@@ -185,7 +185,7 @@ class PolarSortTests(unittest.TestCase):
 
         last = sorted_cells[0]
         for cell in sorted_cells[1:]:
-            self.assertLess(last.collection_point.polar_angle(), cell.collection_point.polar_angle())
+            self.assertLessEqual(last.collection_point.polar_angle(), cell.collection_point.polar_angle())
             last = cell
 
 

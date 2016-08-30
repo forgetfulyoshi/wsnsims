@@ -1,29 +1,30 @@
+import logging
+
 from flower import constants
 from flower import tour
 from flower.grid import WorldPositionMixin
 
 
-class ClusterMixin(object):
-    def __init__(self, central_cell):
+class ClusterError(Exception):
+    pass
+
+
+class ClusterMixin(WorldPositionMixin):
+    def __init__(self):
+        WorldPositionMixin.__init__(self)
+
         self._cells = list()
         self._tour = list()
         self._tour_length = 0
-        self._central_cell = central_cell
-        self._recent = None
 
-    def _calculate_tour(self):
-        cells = list(set(self._cells + [self._central_cell]))
-        self._tour = tour.find_tour(cells, radius=0, start=self._central_cell)
+    def calculate_tour(self):
+        self._tour = tour.find_tour(list(self.cells), radius=0)
         self._tour_length = tour.tour_length(self._tour)
 
-    def _calculate_location(self):
-        com = tour.centroid(self._cells + [self._central_cell])
+    def update_location(self):
+        com = tour.centroid(self._cells)
         self.x = com.x
         self.y = com.y
-
-    def update(self):
-        self._calculate_tour()
-        self._calculate_location()
 
     @property
     def tour_length(self):
@@ -36,18 +37,29 @@ class ClusterMixin(object):
     @cells.setter
     def cells(self, value):
         self._cells = value
-        self.update()
+        self.update_location()
 
     def append(self, *args):
         self._cells.append(args)
-        self.update()
+        self.update_location()
 
     def add(self, cell):
-        self.cells = list(set(self.cells + [cell]))
-        self._recent = cell
+        if cell not in self._cells:
+            logging.debug("Adding %s to %s", cell, self)
+            self._cells.append(cell)
+            self.update_location()
+        else:
+            logging.warning("Invalid attempt to re-add %s to %s", cell, self)
+            raise ClusterError()
 
     def remove(self, cell):
-        self.cells.remove(cell)
+        if cell not in self._cells:
+            logging.warning("Invalid attempt to remove %s from %s %s", cell, self, self._cells)
+            raise ClusterError()
+        else:
+            logging.debug("Removing %s from %s", cell, self)
+            self._cells.remove(cell)
+            self.update_location()
 
     def tour(self):
         return [c.collection_point for c in self._tour]
@@ -73,52 +85,60 @@ class ClusterMixin(object):
 
 
 class Cluster(ClusterMixin):
-    def __init__(self, central_cell):
-        ClusterMixin.__init__(self, central_cell)
+    def __init__(self):
+        ClusterMixin.__init__(self)
 
         self.cluster_id = constants.NOT_CLUSTERED
         self.completed = False
-        self.anchor = central_cell
+        self.anchor = None
+        self.central_cluster = None
+        self._recent = None
 
-    def update(self):
-        super(Cluster, self).update()
-        for c in self._cells:
-            c.cluster_id = self.cluster_id
+    def __str__(self):
+        return "Cluster {}".format(self.cluster_id)
 
+    def __repr__(self):
+        return "C{}".format(self.cluster_id)
+
+    @property
     def recent(self):
-        if self._recent:
-            return self._recent
+        return self._recent
 
-        recent_cell = self.cells[-1:][0]
-        return recent_cell
+    @recent.setter
+    def recent(self, value):
+        logging.debug("Setting RC(%r) to %r", self, value)
+        self._recent = value
 
-    def update_anchor(self, central_cluster):
+        if value not in self.cells:
+            logging.warning("%r is not a member of %r", value, self)
+
+    def update_anchor(self):
+
         candidates = list()
         for cell in self.cells:
-            closest = min(central_cluster.cells, key=lambda x: x.distance(cell))
+            closest = min(self.central_cluster.cells, key=lambda x: x.distance(cell))
             distance = closest.distance(cell)
             candidates.append((distance, closest))
 
         _, anchor = min(candidates, key=lambda x: x[0])
+
         self.anchor = anchor
-        self._central_cell = anchor
-
-        self.update()
 
 
-class VirtualCluster(WorldPositionMixin, ClusterMixin):
-    def __init__(self, central_cell):
-        WorldPositionMixin.__init__(self)
-        ClusterMixin.__init__(self, central_cell)
+class VirtualCluster(ClusterMixin):
+    def __init__(self):
+        ClusterMixin.__init__(self)
 
         self.virtual_cluster_id = constants.NOT_CLUSTERED
 
-    def update(self):
-        super(VirtualCluster, self).update()
-        for c in self._cells:
-            c.virtual_cluster_id = self.virtual_cluster_id
+    # def __str__(self):
+    #     return "Virtual Cluster {}".format(self.virtual_cluster_id)
+    #
+    # def __repr__(self):
+    #     return "VC{}".format(self.virtual_cluster_id)
 
     def __add__(self, other):
-        new_vc = VirtualCluster(self._central_cell)
+        new_vc = VirtualCluster()
         new_vc.cells = list(set(self.cells + other.cells))
+        new_vc.update_location()
         return new_vc

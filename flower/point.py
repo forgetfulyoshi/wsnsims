@@ -33,6 +33,12 @@ class Vec2(object):
         cross = self.x * other.y - other.x * self.y
         return cross
 
+    def __hash__(self):
+        return id(self)
+
+    def __eq__(self, other):
+        return id(self) == id(other)
+
     def normalized(self, origin=None):
         if not self.length():
             return Vec2(0, 0)
