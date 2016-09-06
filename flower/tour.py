@@ -69,6 +69,9 @@ def find_tour(segments, radius=0, start=None):
 
     if len(segments) == 1:
         tour = segments
+
+        # HACK
+        segments[0].collection_point = point.Vec2(segments[0].x, segments[0].y)
     elif len(segments) == 2:
         tour = two_body_tour(segments[0], segments[1], radius)
     else:

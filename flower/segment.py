@@ -12,6 +12,7 @@ class Segment(grid.WorldPositionMixin):
         self.segment_id = Segment.count
         Segment.count += 1
 
+        self.is_virtual = False
         self.data = {}
 
     def data_volume(self, segment):

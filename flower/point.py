@@ -82,6 +82,24 @@ class Vec2(object):
         self.y = v.y * length
         return self
 
+    def scale(self, scale):
+        self.x *= scale
+        self.y *= scale
+        return self
+
+
+def closest_point(v, w, p):
+    """
+    Find the point closest to p on the line between v and w
+    Modified from StackOverflow at http://stackoverflow.com/a/1501725
+
+    Returns the distance and the point on the line segment between v and w
+    """
+    length = v.distance(w) ** 2
+    t = max(0, min(1, ((p - v) * (w - v)) / length))
+    projection = v + (w - v).scale(t)
+    return projection.distance(p), projection
+
 
 def direction(p0, p1, p2):
     cp = (p2 - p0) ^ (p1 - p0)

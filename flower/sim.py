@@ -1,7 +1,5 @@
 """Main FLOWER simulation logic"""
 
-import collections
-import itertools
 import logging
 import random
 import statistics
@@ -193,7 +191,7 @@ class Simulation(object):
         # clusters
         while len(vcs) >= constants.MDC_COUNT:
             logging.info("Current VCs: %r", vcs)
-            vcs = combine_vcs(vcs, vck)
+            vcs = cluster.combine_clusters(vcs, vck)
 
         # Sort the VCs in polar order and assign an id
         sorted_vcs = point.sort_polar(vcs)
@@ -339,7 +337,7 @@ class Simulation(object):
         r = 0
         while True:
             if self.central_cluster == c_least:
-                _, c_in = closest_cells(self.central_cluster, c_most)
+                _, c_in = cluster.closest_cells(self.central_cluster, c_most)
 
                 c_most.remove(c_in)
                 self.central_cluster.add(c_in)
@@ -362,7 +360,7 @@ class Simulation(object):
 
             elif self.central_cluster == c_most:
                 # shrink c_most
-                c_out, _ = closest_cells(self.central_cluster, c_least)
+                c_out, _ = cluster.closest_cells(self.central_cluster, c_least)
 
                 self.central_cluster.remove(c_out)
                 c_least.add(c_out)
@@ -370,7 +368,6 @@ class Simulation(object):
 
                 [c.update_anchor() for c in self.clusters]
                 [c.calculate_tour() for c in self.clusters]
-
 
                 # emulate a do ... while loop
                 stdev_new = statistics.pstdev([c.total_energy() for c in self.clusters])
@@ -386,13 +383,13 @@ class Simulation(object):
 
             else:
                 # grow c_least
-                c_out, _ = closest_cells(self.central_cluster, c_least)
+                c_out, _ = cluster.closest_cells(self.central_cluster, c_least)
                 self.central_cluster.remove(c_out)
                 c_least.add(c_out)
                 c_out.cluster_id = c_least.cluster_id
 
                 # shrink c_most
-                _, c_in = closest_cells(self.central_cluster, c_most)
+                _, c_in = cluster.closest_cells(self.central_cluster, c_most)
                 c_most.remove(c_in)
                 self.central_cluster.add(c_in)
                 c_in.cluster_id = self.central_cluster.cluster_id
@@ -419,43 +416,6 @@ class Simulation(object):
 
         [c.update_anchor() for c in self.clusters]
         [c.calculate_tour() for c in self.clusters]
-
-
-def combine_vcs(vcs, center):
-    index = 0
-    decorated = list()
-    for vci in vcs:
-        for vcj in vcs[vcs.index(vci) + 1:]:
-            temp_vc_1 = vci + vcj + center
-            temp_vc_1.calculate_tour()
-
-            temp_vc_2 = vci + center
-            temp_vc_2.calculate_tour()
-
-            combination_cost = temp_vc_1.tour_length - temp_vc_2.tour_length
-            decorated.append((combination_cost, index, vci, vcj))
-            index += 1
-
-    decorated.sort()
-    cost, _, vci, vcj = decorated[0]
-    logging.info("Combining %s and %s (%f)", vci, vcj, cost)
-
-    new_vcs = list(vcs)
-    new_vc = vci + vcj
-    new_vc.calculate_tour()
-
-    new_vcs.remove(vci)
-    new_vcs.remove(vcj)
-    new_vcs.append(new_vc)
-    return new_vcs
-
-
-def closest_cells(cluster_1, cluster_2):
-    pairs = itertools.product(cluster_1.cells, cluster_2.cells)
-    decorated = [(cell_1.cell_distance(cell_2), i, cell_1, cell_2) for i, (cell_1, cell_2) in enumerate(pairs)]
-    closest = min(decorated)
-    cells = closest[2], closest[3]
-    return cells
 
 
 def plot(points, *args, **kwargs):

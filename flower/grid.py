@@ -185,3 +185,4 @@ class Grid(object):
 
     def center(self):
         return self.cell(self.rows // 2, self.cols // 2)
+
