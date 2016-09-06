@@ -74,6 +74,9 @@ class ClusterMixin(WorldPositionMixin):
     def tour(self):
         return [c.collection_point for c in self._tour]
 
+    def tour_clusters(self):
+        return self._tour
+
     def motion_energy(self):
         cost = constants.MOVEMENT_COST * self.tour_length
         return cost
@@ -191,7 +194,7 @@ class ToCSCentoid(Cluster):
         self.rendezvous_points = {}
 
     def calculate_tour(self):
-        cells = list(self.rendezvous_points.values())
+        cells = list(self.rendezvous_points.values()) + self.segments
         self._tour = tour.find_tour(cells, radius=0)
         self._tour_length = tour.tour_length(self._tour)
 
@@ -237,3 +240,11 @@ def closest_cells(cluster_1, cluster_2):
     closest = min(decorated)
     cells = closest[2], closest[3]
     return cells
+
+
+def closest_points(points_1, points_2):
+    pairs = itertools.product(points_1, points_2)
+    decorated = [(point_1.distance(point_2), i, point_1, point_2) for i, (point_1, point_2) in enumerate(pairs)]
+    closest = min(decorated)
+    points = closest[2], closest[3]
+    return points

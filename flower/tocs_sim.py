@@ -150,6 +150,44 @@ class ToCS(object):
                     c.calculate_tour()
                     self.centroid.calculate_tour()
 
+                    c_tour = c.tour_clusters()
+                    closest, _ = cluster.closest_points(c_tour, [self.virtual_center_segment])
+                    closest_index = c_tour.index(closest)
+                    if point.direction(c_tour[(closest_index + 1) % len(c_tour)], closest, c.rendezvous_point) > 0:
+                        logging.info("Need to move %s into the centroid group!", c)
+
+                        # Move the segment to the centroid cluster
+                        c.remove(closest)
+                        self.centroid.add(closest)
+
+                        # Update the tours
+                        c.calculate_tour()
+                        self.centroid.calculate_tour()
+
+                        # Re-calculate the rendezvous point like we did in the initializing step
+                        if len(c.segments) == 1:
+                            rendezvous_point = c.segments[0]
+
+                        else:
+                            decorated = list()
+                            prev = c.segments[0]
+                            for i, s in enumerate(c.segments[1:], start=1):
+                                dist, pt = point.closest_point(prev, s, self.virtual_center_segment)
+                                decorated.append((dist, i, pt))
+                                prev = s
+
+                            rendezvous_point = min(decorated)[2]
+
+                        c.rendezvous_point = rendezvous_point - self.virtual_center_segment
+                        c.rendezvous_point.scale(0.5)
+                        c.rendezvous_point += self.virtual_center_segment
+
+                        self.centroid.rendezvous_points[c] = c.rendezvous_point
+
+                        # Update the tours
+                        c.calculate_tour()
+                        self.centroid.calculate_tour()
+
             for c in short_clusters:
                 while c.tour_length < atl - 500.0:
                     # Move the rendezvous point closer to the centroid
@@ -205,7 +243,6 @@ def main():
     sim.show_state()
     sim.optimize_rendezvous_points()
     sim.show_state()
-
 
 
 if __name__ == '__main__':
