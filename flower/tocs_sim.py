@@ -9,20 +9,9 @@ from flower import constants
 from flower import grid
 from flower import point
 from flower import segment
+from flower import simulator
 
 logging.basicConfig(level=logging.DEBUG)
-
-
-def much_greater_than(em, ec, r=0.2, r_prime=0.2):
-    if em / ec > 1 / r:
-        logging.info("Em >> Ec (%f)", em / ec)
-        return True
-
-    if ec / em > 1 / r_prime:
-        logging.info("Ec >> Em (%f)", ec / em)
-        return True
-
-    return False
 
 
 class ToCS(object):
@@ -233,7 +222,7 @@ def scatter(points, radius):
     plt.axis('scaled')
 
 
-def main():
+def compute_paths():
     sim = ToCS()
     sim.set_up()
     sim.create_clusters()
@@ -243,6 +232,12 @@ def main():
     sim.show_state()
     sim.optimize_rendezvous_points()
     sim.show_state()
+    return sim
+
+
+def main():
+    sim = compute_paths()
+    simulator.run_sim(sim)
 
 
 if __name__ == '__main__':

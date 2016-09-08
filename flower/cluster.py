@@ -174,8 +174,10 @@ class ToCSCluster(Cluster):
 
         if self.rendezvous_point:
             cells.append(self.rendezvous_point)
+            self._tour = tour.find_tour(cells, radius=0, start=self.rendezvous_point)
+        else:
+            self._tour = tour.find_tour(cells, radius=0)
 
-        self._tour = tour.find_tour(cells, radius=0)
         self._tour_length = tour.tour_length(self._tour)
 
     def __str__(self):
