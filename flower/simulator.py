@@ -1,18 +1,82 @@
 import logging
+import statistics
 
-import matplotlib.pyplot as plt
-
-from flower import mobile
+from flower import data
+from flower import point
 
 logging.basicConfig(level=logging.DEBUG)
 
 
+def trip(src, dst, sim):
+    distance = 0
+
+    if dst in src.cluster.tour_nodes() or src in dst.cluster.tour_nodes():
+        tour = list(src.cluster.tour_nodes())
+        tour = point.rotate_to_start(tour, src)
+        current = src
+        for p in tour[1:]:
+            distance += current.distance(p)
+            current = p
+            if p == dst:
+                break
+
+    elif src.cluster == sim.centroid:
+        distance = trip(src, dst.cluster.rendezvous_point, sim) + trip(dst.cluster.rendezvous_point, dst, sim)
+
+    elif dst.cluster == sim.centroid:
+        distance = trip(src, src.cluster.rendezvous_point, sim) + trip(src.cluster.rendezvous_point, dst, sim)
+
+    else:
+        distance = (trip(src, src.cluster.rendezvous_point, sim) +
+                    trip(src.cluster.rendezvous_point, dst.cluster.rendezvous_point, sim) +
+                    trip(dst.cluster.rendezvous_point, dst, sim))
+
+    # logging.debug("Distance from %r to %r is %f", src, dst, distance)
+    return distance
+
+
+def comm_delay(src, dst, simulation_data):
+    d_t = trip(src, dst, simulation_data) / simulation_data.mdc_speed
+
+    if src.cluster == dst.cluster:
+        multiplier = 1
+    elif (src.cluster == simulation_data.centroid) or (dst.cluster == simulation_data.centroid):
+        multiplier = 2
+    else:
+        multiplier = 3
+
+    d_c = multiplier / simulation_data.transmission_rate * data.data(src, dst)
+    delay = d_t + d_c
+
+    # TODO: How to calculate HT?
+    if src.cluster != dst.cluster:
+        pass
+
+    return delay
+
+
 def max_intersegment_comm_delay(simulation_data):
-    pass
+    segments = simulation_data.segments
+    segment_pairs = [(s1, s2) for s1 in segments for s2 in segments if s1 != s2]
+
+    delays = [comm_delay(s, d, simulation_data) for s, d in segment_pairs]
+    average_delay = statistics.mean(delays)
+    maximum_delay = max(delays)
+    return maximum_delay, average_delay
 
 
 def mdc_energy_balance(simulation_data):
-    pass
+    energy = list()
+    clusters = simulation_data.clusters + [simulation_data.centroid]
+    for c in clusters:
+        e_m = c.motion_energy()
+        e_c = c.communication_energy([segment for segment in simulation_data.segments if segment.cluster != c])
+
+        mdc_energy = e_m + e_c
+        energy.append(mdc_energy)
+
+    energy_balance = statistics.pstdev(energy)
+    return energy_balance
 
 
 def network_lifetime(simulation_data):
@@ -27,37 +91,9 @@ def buffer_space_required(simulation_data):
     pass
 
 
-def initialize_mdcs(simulation_data):
-    mdcs = [mobile.MDC(c) for c in simulation_data.clusters]
-    mdcs.append(mobile.MDC(simulation_data.centroid))
-    return mdcs
-
-
 def run_sim(simulation_data):
-    mdcs = initialize_mdcs(simulation_data)
+    maximum, mean = max_intersegment_comm_delay(simulation_data)
+    logging.info("Maximum delay is: %f", maximum)
+    logging.info("Average delay is: %f", mean)
 
-    elapsed_time = 0.0
-    while True:
-        if not elapsed_time % 100:
-            plot(mdcs, 'bo')
-            plot(simulation_data.centroid.tour(), 'r')
-            plot(simulation_data.segments, 'ro')
-
-            for c in simulation_data.clusters:
-                plot(c.tour(), 'g')
-
-            plt.show()
-
-        [mdc.update() for mdc in mdcs]
-
-        if any(mdc.is_dead for mdc in mdcs):
-            logging.info("Simulation finished at %f", elapsed_time)
-            break
-
-        elapsed_time += 1.0
-
-
-def plot(points, *args, **kwargs):
-    x = [p.x for p in points]
-    y = [p.y for p in points]
-    plt.plot(x, y, *args, **kwargs)
+    logging.info("Energy balance is: %f", mdc_energy_balance(simulation_data))

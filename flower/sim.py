@@ -27,31 +27,44 @@ def much_greater_than(em, ec, r=0.2, r_prime=0.2):
     return False
 
 
-class Simulation(object):
+class FlowerSim(object):
     def __init__(self):
 
-        self.segments = list()
         self.grid = grid.Grid(1200, 1200)
-        self.segment_cover = list()
         self.damaged = self.grid.center()
+        self.segments = list()
+        self.cells = list()
         self.virtual_clusters = list()
+
+        self.clusters = list()
         self.mechanical_energy = 0
         self.communication_energy = 0
-        self.ISDVA = 45.0 * 1024 * 1024
+
+        self.ISDVA = 45.0
         self.ISDVSD = 0.0
-        self.mobile_nodes = list()
-        self.central_cluster = None
-        self.central_virtual_cluster = None
-        self.clusters = list()
-        self.mdc_k = None
+
+        # Create a virtual segment to represent the center of the damaged
+        # area
+        virtual_center_cell = self.damaged
+
+        self.virtual_hub = cluster.FlowerVirtualHub()
+        self.virtual_hub.add(virtual_center_cell)
+        self.virtual_hub.virtual_cluster_id = constants.MDC_COUNT
+        virtual_center_cell.virtual_cluster_id = constants.MDC_COUNT
+
+        self.hub = cluster.FlowerHub()
+        self.hub.add(virtual_center_cell)
+        self.hub.recent = virtual_center_cell
+        self.hub.cluster_id = constants.MDC_COUNT
+        virtual_center_cell.cluster_id = constants.MDC_COUNT
 
     def show_state(self):
         # show all segments
         plot(self.segments, 'rx')
 
         # show all cells
-        plot(self.segment_cover, 'bo')
-        scatter(self.segment_cover, constants.COMMUNICATION_RANGE)
+        plot(self.cells, 'bo')
+        scatter(self.cells, constants.COMMUNICATION_RANGE)
 
         if self.clusters:
             # show all clusters
@@ -61,7 +74,7 @@ class Simulation(object):
             for vc in self.clusters:
                 plot(vc.tour(), 'g')
 
-            plot(self.central_cluster.tour(), 'r')
+            plot(self.hub.tour(), 'r')
 
         elif self.virtual_clusters:
             # show all clusters
@@ -71,7 +84,7 @@ class Simulation(object):
             for vc in self.virtual_clusters:
                 plot(vc.tour(), 'g')
 
-            plot(self.central_virtual_cluster.tour(), 'r')
+            plot(self.virtual_hub.tour(), 'r')
 
         plot([self.damaged], 'go')
 
@@ -165,36 +178,26 @@ class Simulation(object):
         # Initialized!!
         logging.info("Length of cover: %d", len(cell_cover))
 
-        self.segment_cover = cell_cover
+        self.cells = cell_cover
 
     def phase_one(self):
 
-        vcs = list()
-
-        # Get the central cell of the damaged area
-        central_cell = self.damaged
-
-        # Create a virtual cluster containing only the central cell
-        vck = cluster.VirtualCluster()
-        vck.cells = [central_cell]
-        central_cell.virtual_cluster_id = constants.MDC_COUNT
-        vck.virtual_cluster_id = constants.MDC_COUNT
-
-        # Create new a virtual cluster for each segment
-        for cell in self.segment_cover:
-            vc = cluster.VirtualCluster()
-            vc.cells = [central_cell, cell]
-            vc.calculate_tour()
-            vcs.append(vc)
+        virtual_clusters = list()
+        for cell in self.cells:
+            c = cluster.FlowerVirtualCluster()
+            c.central_cluster = self.virtual_hub
+            c.add(cell)
+            c.calculate_tour()
+            virtual_clusters.append(c)
 
         # Combine the clusters until we have MDC_COUNT - 1 non-central, virtual
         # clusters
-        while len(vcs) >= constants.MDC_COUNT:
-            logging.info("Current VCs: %r", vcs)
-            vcs = cluster.combine_clusters(vcs, vck)
+        while len(virtual_clusters) >= constants.MDC_COUNT:
+            logging.info("Current VCs: %r", virtual_clusters)
+            virtual_clusters = cluster.combine_clusters(virtual_clusters, self.virtual_hub)
 
         # Sort the VCs in polar order and assign an id
-        sorted_vcs = point.sort_polar(vcs)
+        sorted_vcs = point.sort_polar(virtual_clusters)
         for i, vc in enumerate(sorted_vcs, start=1):
             vc.virtual_cluster_id = i
 
@@ -204,90 +207,137 @@ class Simulation(object):
 
         for vc in sorted_vcs:
             for cell in vc.cells:
-                logging.info("Cell %r is in VC %d", cell, cell.virtual_cluster_id)
+                logging.info("%s is in %s", cell, vc)
 
         self.virtual_clusters = sorted_vcs
-        self.central_virtual_cluster = vck
 
     def compute_total_energy(self, clusters):
         for c in clusters:
             self.mechanical_energy += c.motion_energy()
-            self.communication_energy += c.communication_energy()
+            other_segments = [s for s in self.segments if s.cluster != c]
+            self.communication_energy += c.communication_energy(other_segments)
 
         logging.info("Total motion energy: %f", self.mechanical_energy)
         logging.info("Total communication energy: %f", self.communication_energy)
 
-    def handle_special_cases(self):
+    @staticmethod
+    def handle_special_cases():
         logging.info("Hit special case!")
 
     def phase_two_a(self):
-        self.compute_total_energy(self.virtual_clusters + [self.central_virtual_cluster])
+
+        # Check for special cases (Em >> Ec or Ec >> Em)
+        self.compute_total_energy(self.virtual_clusters + [self.virtual_hub])
 
         if much_greater_than(self.mechanical_energy, self.communication_energy):
             self.handle_special_cases()
 
-        self.central_cluster = cluster.Cluster()
-        self.central_cluster.cells = self.central_virtual_cluster.cells
-        self.central_cluster.cluster_id = self.central_virtual_cluster.virtual_cluster_id
-        self.central_cluster.recent = self.damaged
-        self.central_cluster.calculate_tour()
+        # First round (initial cell setup and energy calculation)
 
         for vc in self.virtual_clusters:
-            c = cluster.Cluster()
+            c = cluster.FlowerCluster()
             c.cluster_id = vc.virtual_cluster_id
-            c.central_cluster = self.central_cluster
+            c.central_cluster = self.hub
 
-            candidates = [c for c in vc.cells if c != self.damaged]
-            c_rt = min(candidates, key=lambda x: x.cell_distance(self.damaged))
-            c_rt.cluster_id = c.cluster_id
-            c.cells = [c_rt]
-            c.recent = c_rt
-            c.calculate_tour()
+            closest_cell, _ = cluster.closest_nodes(vc, self.hub)
+            closest_cell.cluster_id = c.cluster_id
+
+            c.nodes = [closest_cell, self.damaged]
+            c.recent = closest_cell
             self.clusters.append(c)
 
-        r = 0
+        # Compute the tours for each of the new clusters. This allows us to
+        # determine the motion energy needed for an MDC to traverse the cluster.
+        # Hub only has one cell though, so we don't need to calculate its tour.
+        [c.calculate_tour() for c in self.clusters]
+
+        # Rounds 2 through N
+        r = 1
         while any(not c.completed for c in self.clusters):
 
             r += 1
 
-            [c.calculate_tour() for c in self.clusters + [self.central_cluster]]
+            # Update the tours for all clusters and the hub cluster
+            [c.calculate_tour() for c in self.clusters + [self.hub]]
 
-            candidates = list(self.clusters) + [self.central_cluster]
+            # Determine the minimum-cost cluster by first filtering out all
+            # non-completed clusters. Then find the the cluster with the lowest
+            # total cost.
+            candidates = self.clusters + [self.hub]
             candidates = [c for c in candidates if not c.completed]
-            c_least = min(candidates, key=lambda x: x.total_energy())
+            c_least = min(candidates, key=lambda x: self.total_cluster_energy(x))
 
-            cells = [s for s in self.segment_cover if s.cluster_id == constants.NOT_CLUSTERED]
+            # In general, only consider cells that have not already been added to a
+            # cluster. There is an exception to this when expanding the hub cluster.
+            cells = [c for c in self.cells if c.cluster_id == constants.NOT_CLUSTERED]
 
+            # If there are no more cells to assign, then we mark this cluster as "completed"
             if not cells:
                 c_least.completed = True
                 logging.info("All cells assigned. Marking %s as completed", c_least)
                 continue
 
-            if c_least == self.central_cluster:
-                if c_least.cells == [self.damaged]:
-                    # find the nearest cell to cg and move Ck to it
-                    best_cell = min(cells, key=lambda x: x.proximity)
-                    self.central_cluster.cells = [best_cell]
-                    self.damaged.cluster_id = constants.NOT_CLUSTERED
-                    logging.info("ROUND %d: Moved central cluster to %r", r, best_cell)
-                else:
-                    best_cell = min(cells, key=lambda x: x.cell_distance(self.central_cluster.recent))
-                    self.central_cluster.add(best_cell)
-                    logging.info("ROUND %d: Added %r to central cluster", r, best_cell)
+            if c_least == self.hub:
 
-                best_cell.cluster_id = self.central_cluster.cluster_id
+                # This logic handles the case where the hub cluster is has the fewest energy
+                # requirements. Either the cluster will be moved (initialization) or it will
+                # be grown.
+                #
+                # If the hub cluster is still in its original location at the center of the
+                # damaged area, we need to move it to an actual cell. If the hub has already
+                # been moved, then we expand it by finding the cell nearest to the center of
+                # the damaged area, and that itself hasn't already been added to the hub cluster.
+
+                if c_least.cells == [self.damaged]:
+                    # Find the nearest cell to the center of the damaged area and move the hub
+                    # to it. This is equivalent to finding the cell with the lowest proximity.
+                    best_cell = min(cells, key=lambda x: x.proximity)
+
+                    # As the hub only currently has the virtual center cell in it, we
+                    # can just "move" the hub to the nearest real cell by replacing the
+                    # virtual cell with it.
+                    self.hub.nodes = [best_cell]
+                    best_cell.cluster = self.hub
+
+                    # Just for proper bookkeeping, reset the virtual cell's ID to NOT_CLUSTERED
+                    self.damaged.cluster_id = constants.NOT_CLUSTERED
+                    logging.info("ROUND %d: Moved %s to %s", r, self.hub, best_cell)
+
+                else:
+                    # Find the set of cells that are not already in the hub cluster
+                    available_cells = list(set(self.cells) - set(self.hub.cells))
+
+                    # Out of those cells, find the one that is closest to the damaged area
+                    best_cell, _ = cluster.closest_nodes(available_cells, [self.damaged])
+
+                    # Add that cell to the hub cluster
+                    self.hub.add(best_cell)
+
+                    logging.info("ROUND %d: Added %s to %s", r, best_cell, self.hub)
+
+                # Set the cluster ID for the new cell, mark it as the most recent cell for the hub
+                # cluster and update the anchors for all other clusters.
+                best_cell.cluster_id = self.hub.cluster_id
                 c_least.recent = best_cell
                 [c.update_anchor() for c in self.clusters]
+
             else:
+
+                # In this case, the cluster with the lowest energy requirements is one of the non-hub
+                # clusters.
 
                 best_cell = None
 
-                index = self.clusters.index(c_least)
-                vci = next(i for i in self.virtual_clusters if i.virtual_cluster_id == index + 1)
+                # Find the VC that corresponds to the current cluster
+                vci = next(i for i in self.virtual_clusters if i.virtual_cluster_id == c_least.cluster_id)
 
-                candidates = [c for c in vci.cells if c.cluster_id == constants.NOT_CLUSTERED and c != self.damaged]
+                # Get a list of the cells that have not yet been added to a cluster
+                candidates = [c for c in vci.cells if c.cluster_id == constants.NOT_CLUSTERED]
+
                 if candidates:
-                    best_cell = min(candidates, key=lambda x: x.cell_distance(c_least.recent))
+
+                    # Find the cell that is closest to the cluster's recent cell
+                    best_cell, _ = cluster.closest_nodes(candidates, [c_least.recent])
 
                 else:
                     for i in range(1, max(self.grid.cols, self.grid.rows) + 1):
@@ -312,11 +362,11 @@ class Simulation(object):
                             best_cell = nbr
                             break
 
-                        if best_cell:
+                        if best_cell or c_least.completed:
                             break
 
                 if best_cell:
-                    logging.info("ROUND %d: Added %r to %s", r, best_cell, c_least)
+                    logging.info("ROUND %d: Added %s to %s", r, best_cell, c_least)
                     c_least.add(best_cell)
                     c_least.recent = best_cell
                     best_cell.cluster_id = c_least.cluster_id
@@ -325,97 +375,113 @@ class Simulation(object):
                     c_least.completed = True
                     logging.info("ROUND %d: No best cell found. Marking %s completed", r, c_least)
 
-                [c.calculate_tour() for c in self.clusters + [self.central_cluster]]
+                [c.calculate_tour() for c in self.clusters + [self.hub]]
+
+            # [c.update_anchor() for c in self.clusters]
+
+    def total_cluster_energy(self, c):
+        other_segments = [s for s in self.segments if s.cluster != c]
+        return c.total_energy(other_segments)
 
     def phase_two_b(self):
 
-        stdev = statistics.pstdev([c.total_energy() for c in self.clusters])
+        all_clusters = self.clusters + [self.hub]
+        stdev = statistics.pstdev([self.total_cluster_energy(c) for c in all_clusters])
 
-        c_least = min(self.clusters, key=lambda x: x.total_energy())
-        c_most = max(self.clusters, key=lambda x: x.total_energy())
+        c_least = min(all_clusters, key=lambda x: self.total_cluster_energy(x))
+        c_most = max(all_clusters, key=lambda x: self.total_cluster_energy(x))
 
         r = 0
         while True:
-            if self.central_cluster == c_least:
-                _, c_in = cluster.closest_cells(self.central_cluster, c_most)
+            if self.hub == c_least:
+                _, c_in = cluster.closest_nodes([c_most.anchor], c_most)
 
                 c_most.remove(c_in)
-                self.central_cluster.add(c_in)
-                c_in.cluster_id = self.central_cluster.cluster_id
+                self.hub.add(c_in)
+                c_in.cluster_id = self.hub.cluster_id
 
                 [c.update_anchor() for c in self.clusters]
-                [c.calculate_tour() for c in self.clusters]
+                [c.calculate_tour() for c in all_clusters]
 
                 # emulate a do ... while loop
-                stdev_new = statistics.pstdev([c.total_energy() for c in self.clusters])
+                stdev_new = statistics.pstdev([self.total_cluster_energy(c) for c in all_clusters])
                 r += 1
                 logging.info("Completed %d rounds of 2b", r)
 
                 # if this round didn't reduce stdev, then revert the changes and exit the loop
                 if stdev_new >= stdev:
-                    self.central_cluster.remove(c_in)
+                    self.hub.remove(c_in)
                     c_most.add(c_in)
                     c_in.cluster_id = c_most.cluster_id
+
+                    [c.update_anchor() for c in self.clusters]
+                    [c.calculate_tour() for c in all_clusters]
                     break
 
-            elif self.central_cluster == c_most:
+            elif self.hub == c_most:
                 # shrink c_most
-                c_out, _ = cluster.closest_cells(self.central_cluster, c_least)
+                c_out, _ = cluster.closest_nodes(self.hub, [c_least.anchor])
 
-                self.central_cluster.remove(c_out)
+                self.hub.remove(c_out)
+
                 c_least.add(c_out)
                 c_out.cluster_id = c_least.cluster_id
 
                 [c.update_anchor() for c in self.clusters]
-                [c.calculate_tour() for c in self.clusters]
+                [c.calculate_tour() for c in all_clusters]
 
                 # emulate a do ... while loop
-                stdev_new = statistics.pstdev([c.total_energy() for c in self.clusters])
+                stdev_new = statistics.pstdev([self.total_cluster_energy(c) for c in all_clusters])
                 r += 1
                 logging.info("Completed %d rounds of 2b", r)
 
                 # if this round didn't reduce stdev, then revert the changes and exit the loop
                 if stdev_new >= stdev:
                     c_least.remove(c_out)
-                    self.central_cluster.add(c_out)
-                    c_out.cluster_id = self.central_cluster.cluster_id
+                    self.hub.add(c_out)
+                    c_out.cluster_id = self.hub.cluster_id
+
+                    [c.update_anchor() for c in self.clusters]
+                    [c.calculate_tour() for c in all_clusters]
                     break
 
             else:
                 # grow c_least
-                c_out, _ = cluster.closest_cells(self.central_cluster, c_least)
-                self.central_cluster.remove(c_out)
+                c_out, _ = cluster.closest_nodes(self.hub, [c_least.anchor])
+                self.hub.remove(c_out)
                 c_least.add(c_out)
                 c_out.cluster_id = c_least.cluster_id
 
                 # shrink c_most
-                _, c_in = cluster.closest_cells(self.central_cluster, c_most)
+                _, c_in = cluster.closest_nodes([c_most.anchor], c_most)
                 c_most.remove(c_in)
-                self.central_cluster.add(c_in)
-                c_in.cluster_id = self.central_cluster.cluster_id
+                self.hub.add(c_in)
+                c_in.cluster_id = self.hub.cluster_id
 
                 [c.update_anchor() for c in self.clusters]
-                [c.calculate_tour() for c in self.clusters]
+                [c.calculate_tour() for c in all_clusters]
 
                 # emulate a do ... while loop
-                stdev_new = statistics.pstdev([c.total_energy() for c in self.clusters])
+                stdev_new = statistics.pstdev([self.total_cluster_energy(c) for c in all_clusters])
                 r += 1
                 logging.info("Completed %d rounds of 2b", r)
 
                 # if this round didn't reduce stdev, then revert the changes and exit the loop
                 if stdev_new >= stdev:
                     c_least.remove(c_out)
-                    self.central_cluster.add(c_out)
-                    c_out.cluster_id = self.central_cluster.cluster_id
+                    self.hub.add(c_out)
+                    c_out.cluster_id = self.hub.cluster_id
 
-                    self.central_cluster.remove(c_in)
+                    self.hub.remove(c_in)
                     c_most.add(c_in)
                     c_in.cluster_id = c_most.cluster_id
 
+                    [c.update_anchor() for c in self.clusters]
+                    [c.calculate_tour() for c in all_clusters]
                     break
 
         [c.update_anchor() for c in self.clusters]
-        [c.calculate_tour() for c in self.clusters]
+        [c.calculate_tour() for c in all_clusters]
 
 
 def plot(points, *args, **kwargs):
@@ -436,7 +502,7 @@ def scatter(points, radius):
 
 
 def main():
-    sim = Simulation()
+    sim = FlowerSim()
     sim.init_segments()
     sim.init_cells()
 
@@ -446,7 +512,10 @@ def main():
     sim.phase_two_a()
     sim.show_state()
 
+    # return
+
     sim.phase_two_b()
+    sim.show_state()
 
     # collection = list()
     # for c in sim.clusters:
@@ -458,7 +527,7 @@ def main():
     #             raise
     #     collection += c.cells
 
-    sim.show_state()
+    # sim.show_state()
 
 
 if __name__ == '__main__':

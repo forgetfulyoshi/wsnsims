@@ -1,8 +1,14 @@
+import random
+
+from flower import constants
+
+data_memo = {}
 
 
-class Packet(object):
+def data(src, dst):
+    if (src, dst) in data_memo:
+        return data_memo[(src, dst)]
 
-    def __init__(self):
-        self.size = 0
-        self.source = 0
-        self.destination = 0
+    size = random.gauss(constants.ISDVA, constants.ISDVSD)
+    data_memo[(src, dst)] = size
+    return size

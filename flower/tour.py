@@ -4,7 +4,7 @@ import statistics
 
 import matplotlib.pyplot as plt
 
-from . import point
+from flower import point
 
 
 class TourError(Exception):
@@ -44,8 +44,15 @@ def two_body_tour(s1, s2, radius):
 
 
 def centroid(segments):
-    x = statistics.mean(p.x for p in segments)
-    y = statistics.mean(p.y for p in segments)
+    if not segments:
+        raise TourError("Cannot calculate centroid from zero nodes")
+
+    if len(segments) == 1:
+        x = segments[0].x
+        y = segments[0].y
+    else:
+        x = statistics.mean(p.x for p in segments)
+        y = statistics.mean(p.y for p in segments)
 
     return point.Vec2(x, y)
 
@@ -99,25 +106,37 @@ def gt_two_body_tour(cells, radius):
         v += cell
         cell.collection_point = v
 
+    hull = point.sort_polar(hull, field='collection_point')
+    tour = list(hull)
+
     # Compute collection points for segments in the interior
     for cell in interior:
         closest = None
-        last = hull[0]
-        for h in hull[1:]:
-            perp = perpendicular_to_line(last, h, cell)
-            last = h
+        parent_index = None
+        node_1 = hull[0]
+        for node_2 in hull[1:]:
+            perp = perpendicular_to_line(node_1, node_2, cell)
 
             if not closest:
+                parent_index = tour.index(node_1)
                 closest = perp
+                node_1 = node_2
                 continue
 
             if closest.length() > perp.length():
+                parent_index = tour.index(node_1)
                 closest = perp
+
+            node_1 = node_2
 
         closest.set_length(radius)
         cell.collection_point = cell + closest
 
-    tour = point.sort_polar(cells, field='collection_point')
+        tour.insert(parent_index + 1, cell)
+
+    # tour = point.sort_polar(tour, field='collection_point')
+    # tour.extend(interior)
+    # tour = cells
     return tour
 
 

@@ -1,30 +1,26 @@
 import random
 
-from flower import grid
+import flower.point
+from flower.sensor import Packet
 
 
-class Segment(grid.WorldPositionMixin):
+class Segment(flower.point.WorldPositionMixin):
     count = 0
 
     def __init__(self, x=0.0, y=0.0):
-        grid.WorldPositionMixin.__init__(self, x, y)
+        flower.point.WorldPositionMixin.__init__(self, x, y)
 
         self.segment_id = Segment.count
         Segment.count += 1
 
+        self.cluster = None
+
         self.is_virtual = False
-        self.data = {}
-
-    def data_volume(self, segment):
-
-        if segment not in self.data:
-            return 0
-
-        return self.data[segment]
+        self.buffer = []
 
     def total_data_volume(self):
         volume = 0
-        for v in list(self.data.values()):
+        for v in list(self.buffer.values()):
             volume += v
 
         return volume
@@ -37,9 +33,8 @@ class Segment(grid.WorldPositionMixin):
 
 
 def initialize_traffic(segments, volume, standard_deviation):
-
-    assert(volume > 0.0)
-    assert(0.0 <= standard_deviation <= 3.0)
+    assert (volume > 0.0)
+    assert (0.0 <= standard_deviation <= 3.0)
 
     for source in segments:
         for destination in segments:
@@ -47,4 +42,6 @@ def initialize_traffic(segments, volume, standard_deviation):
             if destination == source:
                 continue
 
-            source.data[destination] = random.gauss(volume, standard_deviation)
+            packet_size = random.gauss(volume, standard_deviation)
+            new_packet = Packet(destination.cluster, destination, packet_size)
+            source.buffer.append(new_packet)

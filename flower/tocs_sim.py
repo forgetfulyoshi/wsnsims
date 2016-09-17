@@ -17,7 +17,7 @@ logging.basicConfig(level=logging.DEBUG)
 class ToCS(object):
     def __init__(self):
 
-        self.grid = grid.Grid(1200, 1200)
+        self.grid = grid.Grid(2000, 2000)
 
         self.segments = list()
         self.virtual_center_segment = segment.Segment()
@@ -25,11 +25,16 @@ class ToCS(object):
         self.virtual_center_segment.y = self.grid.center().y
         self.virtual_center_segment.is_virtual = True
 
-        self.centroid = cluster.ToCSCentoid(self.virtual_center_segment)
+        self.centroid = cluster.ToCSCentroid(self.virtual_center_segment)
 
-        self.ISDVA = 45.0 * 1024 * 1024
-        self.ISDVSD = 0.0
+        self.isdva = constants.ISDVA  # Mb
+        self.isdvsd = constants.ISDVSD
         self.clusters = list()
+        self.mdc_speed = 0.1  # meters / second
+        self.transmission_rate = 0.1  # Mbps
+
+        self.movement_cost = 1.0  # Joule / meter
+        self.comms_cost = 2.0  # Joule / Mbit
 
     def show_state(self):
         # show all segments
@@ -41,13 +46,13 @@ class ToCS(object):
 
             # show the MDC tours
             for c in self.clusters:
-                plot(c.tour(), 'g')
+                plot(c.tour_nodes(), 'g')
 
                 if c.rendezvous_point:
                     plot([c.rendezvous_point], 'ro')
 
             plot([self.centroid], 'ro')
-            plot(self.centroid.tour(), 'r')
+            plot(self.centroid.tour_nodes(), 'r')
 
         plt.show()
 
@@ -64,8 +69,8 @@ class ToCS(object):
             seg = segment.Segment(x_pos, y_pos)
             self.segments.append(seg)
 
-        # Initialize the data for each segment
-        segment.initialize_traffic(self.segments, self.ISDVA, self.ISDVSD)
+            # Initialize the data for each segment
+            # segment.initialize_traffic(self.segments, self.ISDVA, self.ISDVSD)
 
     def create_clusters(self):
 
@@ -102,11 +107,17 @@ class ToCS(object):
 
                 rendezvous_point = min(decorated)[2]
 
-            c.rendezvous_point = rendezvous_point - self.virtual_center_segment
-            c.rendezvous_point.scale(0.5)
-            c.rendezvous_point += self.virtual_center_segment
+            rendezvous_point -= self.virtual_center_segment
+            rendezvous_point.scale(0.5)
+            rendezvous_point += self.virtual_center_segment
 
-            self.centroid.rendezvous_points[c] = c.rendezvous_point
+            # Make sure we can treat this as a "virtual segment"
+            rendezvous_point = segment.Segment(rendezvous_point.x, rendezvous_point.y)
+            rendezvous_point.is_virtual = True
+            rendezvous_point.cluster = self.centroid
+
+            c.rendezvous_point = rendezvous_point
+            self.centroid.rendezvous_points[c] = rendezvous_point
 
         [c.calculate_tour() for c in self.clusters + [self.centroid]]
 
@@ -229,9 +240,9 @@ def compute_paths():
     sim.show_state()
     sim.find_initial_rendezvous_points()
     logging.info("Average tour length: %f", sim.average_tour_length())
-    sim.show_state()
-    sim.optimize_rendezvous_points()
-    sim.show_state()
+    # sim.show_state()
+    # sim.optimize_rendezvous_points()
+    # sim.show_state()
     return sim
 
 

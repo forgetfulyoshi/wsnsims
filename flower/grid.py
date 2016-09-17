@@ -4,13 +4,8 @@ import itertools
 import logging
 import math
 
-from flower import constants
-from flower import point
-
-
-class WorldPositionMixin(point.Vec2):
-    def __init__(self, x=0.0, y=0.0):
-        super(WorldPositionMixin, self).__init__(x, y)
+from flower import point, constants
+from flower.point import WorldPositionMixin
 
 
 class GridPositionMixin(object):
@@ -49,36 +44,6 @@ class GridPositionMixin(object):
         """ Calculate cell distance as per the FLOWER paper """
         dist = max(abs(self.row - other.row), abs(self.col - other.col))
         return dist
-
-
-class Cell(WorldPositionMixin, GridPositionMixin):
-    """ Defines a cell in the grid """
-
-    side_len = constants.COMMUNICATION_RANGE / math.sqrt(2)
-    count = 1
-
-    def __init__(self, x=0.0, y=0.0):
-        WorldPositionMixin.__init__(self)
-        GridPositionMixin.__init__(self)
-        self.neighbors = list()
-        self.access = 0
-        self.signal_hop_count = 0
-        self.proximity = 0
-        self.segments = list()
-        self.collection_point = None
-        self.x = x
-        self.y = y
-        self.virtual_cluster_id = constants.NOT_CLUSTERED
-        self.cluster_id = constants.NOT_CLUSTERED
-
-        self._cell_id = Cell.count
-        Cell.count += 1
-
-    def __str__(self):
-        return "Cell %d (Cluster %d)" % (self._cell_id, self.cluster_id)
-
-    def __repr__(self):
-        return "Cell %d" % (self._cell_id,)
 
 
 class Grid(object):
@@ -163,7 +128,8 @@ class Grid(object):
         #
         # First, generate the set of possible coordinates
         #        
-        possible_coords = itertools.product(list(range(row - radius, row + radius + 1)), list(range(col - radius, col + radius + 1)))
+        possible_coords = itertools.product(list(range(row - radius, row + radius + 1)),
+                                            list(range(col - radius, col + radius + 1)))
 
         #
         # Now, filter out all coordinates not on the grid
@@ -186,3 +152,33 @@ class Grid(object):
     def center(self):
         return self.cell(self.rows // 2, self.cols // 2)
 
+
+class Cell(WorldPositionMixin, GridPositionMixin):
+    """ Defines a cell in the grid """
+
+    side_len = constants.COMMUNICATION_RANGE / math.sqrt(2)
+    count = 1
+
+    def __init__(self, x=0.0, y=0.0):
+        WorldPositionMixin.__init__(self, x, y)
+        GridPositionMixin.__init__(self)
+
+        self.neighbors = list()
+        self.access = 0
+        self.signal_hop_count = 0
+        self.proximity = 0
+        self.segments = list()
+        self.collection_point = None
+
+        self.virtual_cluster_id = constants.NOT_CLUSTERED
+        self.cluster_id = constants.NOT_CLUSTERED
+        self.cluster = None
+
+        self._cell_id = Cell.count
+        Cell.count += 1
+
+    def __str__(self):
+        return "Cell %d (Cluster %d)" % (self._cell_id, self.cluster_id)
+
+    def __repr__(self):
+        return "Cell %d" % (self._cell_id,)

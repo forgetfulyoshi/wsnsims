@@ -150,3 +150,8 @@ def graham_scan(points):
 
     interior = list(set(sorted_points).difference(hull))
     return hull, interior
+
+
+class WorldPositionMixin(Vec2):
+    def __init__(self, x=0.0, y=0.0):
+        super(WorldPositionMixin, self).__init__(x, y)
