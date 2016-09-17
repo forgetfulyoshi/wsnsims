@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 
 from flower import cluster
 from flower import constants
+from flower import flower_runner
 from flower import grid
 from flower import point
 from flower import segment
@@ -57,6 +58,9 @@ class FlowerSim(object):
         self.hub.recent = virtual_center_cell
         self.hub.cluster_id = constants.MDC_COUNT
         virtual_center_cell.cluster_id = constants.MDC_COUNT
+
+        self.mdc_speed = 0.1  # meters / second
+        self.transmission_rate = 0.1  # Mbps
 
     def show_state(self):
         # show all segments
@@ -180,7 +184,7 @@ class FlowerSim(object):
 
         self.cells = cell_cover
 
-    def phase_one(self):
+    def create_virtual_clusters(self):
 
         virtual_clusters = list()
         for cell in self.cells:
@@ -224,7 +228,7 @@ class FlowerSim(object):
     def handle_special_cases():
         logging.info("Hit special case!")
 
-    def phase_two_a(self):
+    def greedy_expansion(self):
 
         # Check for special cases (Em >> Ec or Ec >> Em)
         self.compute_total_energy(self.virtual_clusters + [self.virtual_hub])
@@ -377,13 +381,13 @@ class FlowerSim(object):
 
                 [c.calculate_tour() for c in self.clusters + [self.hub]]
 
-            # [c.update_anchor() for c in self.clusters]
+                # [c.update_anchor() for c in self.clusters]
 
     def total_cluster_energy(self, c):
         other_segments = [s for s in self.segments if s.cluster != c]
         return c.total_energy(other_segments)
 
-    def phase_two_b(self):
+    def optimization(self):
 
         all_clusters = self.clusters + [self.hub]
         stdev = statistics.pstdev([self.total_cluster_energy(c) for c in all_clusters])
@@ -501,33 +505,26 @@ def scatter(points, radius):
     plt.axis('scaled')
 
 
-def main():
+def compute_paths():
     sim = FlowerSim()
     sim.init_segments()
     sim.init_cells()
 
-    sim.phase_one()
-    sim.show_state()
-
-    sim.phase_two_a()
-    sim.show_state()
-
-    # return
-
-    sim.phase_two_b()
-    sim.show_state()
-
-    # collection = list()
-    # for c in sim.clusters:
-    #     for cell in c.cells:
-    #         try:
-    #             assert(cell not in collection)
-    #         except AssertionError:
-    #             logging.debug("Cell %r is a duplicate", cell)
-    #             raise
-    #     collection += c.cells
-
+    sim.create_virtual_clusters()
     # sim.show_state()
+
+    sim.greedy_expansion()
+    # sim.show_state()
+
+    sim.optimization()
+    # sim.show_state()
+
+    return sim
+
+
+def main():
+    sim = compute_paths()
+    flower_runner.run_sim(sim)
 
 
 if __name__ == '__main__':

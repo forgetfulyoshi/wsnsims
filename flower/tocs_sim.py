@@ -9,7 +9,7 @@ from flower import constants
 from flower import grid
 from flower import point
 from flower import segment
-from flower import simulator
+from flower import tocs_runner
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -248,7 +248,7 @@ def compute_paths():
 
 def main():
     sim = compute_paths()
-    simulator.run_sim(sim)
+    tocs_runner.run_sim(sim)
 
 
 if __name__ == '__main__':
