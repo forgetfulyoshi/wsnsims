@@ -33,6 +33,7 @@ class ToCS(object):
         self.mdc_speed = 0.1  # meters / second
         self.transmission_rate = 0.1  # Mbps
 
+        self.mdc_energy = 1000  # Joule
         self.movement_cost = 1.0  # Joule / meter
         self.comms_cost = 2.0  # Joule / Mbit
 

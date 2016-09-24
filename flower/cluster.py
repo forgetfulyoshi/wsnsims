@@ -65,16 +65,16 @@ class ClusterMixin(WorldPositionMixin):
             self.update_location()
 
     def tour(self):
-        return [n.collection_point for n in self._tour]
+        return [n.collection_point for n in self._tour + [self._tour[0]]]
 
     def tour_nodes(self):
-        return self._tour
+        return self._tour + [self._tour[0]]
 
     def motion_energy(self):
         cost = constants.MOVEMENT_COST * self.tour_length
         return cost
 
-    def communication_energy(self, other_nodes):
+    def data_volume(self, other_nodes):
         all_nodes = self._nodes + other_nodes
         node_pairs = [(src, dst) for src in all_nodes for dst in all_nodes if src != dst]
 
@@ -83,6 +83,11 @@ class ClusterMixin(WorldPositionMixin):
 
         # Volume in bits
         data_volume *= 1024 * 1024
+        return data_volume
+
+    def communication_energy(self, other_nodes):
+        # Volume in bits
+        data_volume = self.data_volume(other_nodes)
 
         e_c = data_volume * (constants.ALPHA + constants.BETA * pow(constants.COMMUNICATION_RANGE, constants.DELTA))
         # e_c = data_volume * 2.0 * pow(10, -6)

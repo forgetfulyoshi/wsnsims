@@ -59,6 +59,7 @@ class FlowerSim(object):
         self.hub.cluster_id = constants.MDC_COUNT
         virtual_center_cell.cluster_id = constants.MDC_COUNT
 
+        self.mdc_energy = 1000  # Joules
         self.mdc_speed = 0.1  # meters / second
         self.transmission_rate = 0.1  # Mbps
 
@@ -104,7 +105,7 @@ class FlowerSim(object):
             if dist_from_center < constants.DAMAGE_RADIUS:
                 continue
 
-            seg = segment.Segment(x_pos, y_pos)
+            seg = segment.FlowerSegment(x_pos, y_pos)
             self.segments.append(seg)
 
         # Initialize the data for each segment
@@ -181,6 +182,11 @@ class FlowerSim(object):
 
         # Initialized!!
         logging.info("Length of cover: %d", len(cell_cover))
+
+        # For future lookups, set a reference from each segment to its cell
+        for cell in cell_cover:
+            for seg in cell.segments:
+                seg.cell = cell
 
         self.cells = cell_cover
 
@@ -312,7 +318,7 @@ class FlowerSim(object):
                     available_cells = list(set(self.cells) - set(self.hub.cells))
 
                     # Out of those cells, find the one that is closest to the damaged area
-                    best_cell, _ = cluster.closest_nodes(available_cells, [self.damaged])
+                    best_cell, _ = cluster.closest_nodes(available_cells, [self.hub.recent])
 
                     # Add that cell to the hub cluster
                     self.hub.add(best_cell)
@@ -517,7 +523,7 @@ def compute_paths():
     # sim.show_state()
 
     sim.optimization()
-    # sim.show_state()
+    sim.show_state()
 
     return sim
 

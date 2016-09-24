@@ -1,6 +1,7 @@
 import logging
 import statistics
 
+from flower import constants
 from flower import data
 from flower import point
 
@@ -80,11 +81,53 @@ def mdc_energy_balance(simulation_data):
 
 
 def network_lifetime(simulation_data):
-    pass
+    lifetimes = list()
+    clusters = simulation_data.clusters + [simulation_data.centroid]
+    for c in clusters:
+
+        e_m = c.motion_energy()
+        e_c = c.communication_energy([segment for segment in simulation_data.segments if segment.cluster != c])
+
+        if len(c.segments) == 1:
+            # Given mdc_energy Joules, how many bits can this MDC transmit?
+            total_energy = simulation_data.mdc_energy
+            one_bit_energy = (constants.ALPHA + constants.BETA * pow(constants.COMMUNICATION_RANGE, constants.DELTA))
+            total_bits = total_energy / one_bit_energy
+
+            # How long will that take?
+            transmission_rate = simulation_data.transmission_rate
+            transmission_rate *= 1024 * 1024  # Convert from Mbps to bits-per-second
+            transmission_time = total_bits / transmission_rate
+
+            lifetimes.append((transmission_time, c))
+
+        else:
+            mdc_energy_per_cycle = e_m + e_c
+            total_cycle_count = simulation_data.mdc_energy / mdc_energy_per_cycle
+            mdc_travel_distance = c.tour_length * total_cycle_count
+            mdc_tour_time = mdc_travel_distance / simulation_data.mdc_speed
+            lifetimes.append((mdc_tour_time, c))
+
+    return lifetimes
 
 
 def average_total_mdc_energy_consumption(simulation_data):
-    pass
+    lifetimes = network_lifetime(simulation_data)
+    shortest_lifetime, _ = min(lifetimes)
+
+    cell_lifetimes = {cell: lifetime for lifetime, cell in lifetimes}
+    energies = list()
+    clusters = simulation_data.clusters + [simulation_data.centroid]
+    for c in clusters:
+        total_energy = simulation_data.mdc_energy
+        lifetime = cell_lifetimes[c]
+
+        percent_completed = shortest_lifetime / lifetime
+        percent_energy = total_energy * percent_completed
+        energies.append(percent_energy)
+
+    average_energy = statistics.mean(energies)
+    return average_energy
 
 
 def buffer_space_required(simulation_data):
@@ -97,3 +140,7 @@ def run_sim(simulation_data):
     logging.info("Average delay is: %f", mean)
 
     logging.info("Energy balance is: %f", mdc_energy_balance(simulation_data))
+
+    shortest, _ = min(network_lifetime(simulation_data))
+    logging.info("Network lifetime is: %f", shortest)
+    logging.info("Average MDC energy consumption: %f", average_total_mdc_energy_consumption(simulation_data))

@@ -32,6 +32,20 @@ class Segment(flower.point.WorldPositionMixin):
         return "SEG %d" % self.segment_id
 
 
+class FlowerSegment(Segment):
+    def __init__(self, x=0.0, y=0.0):
+        super(FlowerSegment, self).__init__(x, y)
+
+        self.cell = None
+
+
+def __str__(self):
+    return "Flower Segment %d: (%f, %f)" % (self.segment_id, self.x, self.y)
+
+
+def __repr__(self):
+    return "FSEG %d" % self.segment_id
+
 def initialize_traffic(segments, volume, standard_deviation):
     assert (volume > 0.0)
     assert (0.0 <= standard_deviation <= 3.0)
