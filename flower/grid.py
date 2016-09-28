@@ -4,7 +4,7 @@ import itertools
 import logging
 import math
 
-from flower import point, constants
+from flower import point, params
 from flower.point import WorldPositionMixin
 
 
@@ -156,7 +156,7 @@ class Grid(object):
 class Cell(WorldPositionMixin, GridPositionMixin):
     """ Defines a cell in the grid """
 
-    side_len = constants.COMMUNICATION_RANGE / math.sqrt(2)
+    side_len = params.COMMUNICATION_RANGE / math.sqrt(2)
     count = 1
 
     def __init__(self, x=0.0, y=0.0):
@@ -170,8 +170,8 @@ class Cell(WorldPositionMixin, GridPositionMixin):
         self.segments = list()
         self.collection_point = None
 
-        self.virtual_cluster_id = constants.NOT_CLUSTERED
-        self.cluster_id = constants.NOT_CLUSTERED
+        self.virtual_cluster_id = params.NOT_CLUSTERED
+        self.cluster_id = params.NOT_CLUSTERED
         self.cluster = None
 
         self._cell_id = Cell.count

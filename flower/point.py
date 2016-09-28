@@ -4,10 +4,17 @@ from operator import attrgetter
 from operator import methodcaller
 
 
+class Vec2Error(Exception):
+    pass
+
+
 class Vec2(object):
     def __init__(self, x, y):
-        self.x = float(x)
-        self.y = float(y)
+        self._x = 0
+        self._y = 0
+
+        self.x = x
+        self.y = y
 
     def __str__(self):
         return "(%f, %f)" % (self.x, self.y)
@@ -38,6 +45,50 @@ class Vec2(object):
 
     def __eq__(self, other):
         return id(self) == id(other)
+
+    @property
+    def x(self):
+        return self._x
+
+    @x.setter
+    def x(self, value):
+        f_value = float(value)
+
+        if math.isnan(f_value):
+            raise Vec2Error("Attempt to set x to nan (pre-cast: {})".format(value))
+
+        if math.isinf(f_value):
+            raise Vec2Error("Attempt to set x to inf (pre-case: {})".format(value))
+
+        if f_value > 10000:
+            raise Vec2Error("Vector is growing very large in the x dimension ({})".format(f_value))
+
+        if f_value < -10000:
+            raise Vec2Error("Vector is growing very small in the x dimension ({})".format(f_value))
+
+        self._x = f_value
+
+    @property
+    def y(self):
+        return self._y
+
+    @y.setter
+    def y(self, value):
+        f_value = float(value)
+
+        if math.isnan(f_value):
+            raise Vec2Error("Attempt to set y to nan (pre-cast: {})".format(value))
+
+        if math.isinf(f_value):
+            raise Vec2Error("Attempt to set y to inf (pre-case: {})".format(value))
+
+        if f_value > 10000:
+            raise Vec2Error("Vector is growing very large in the y dimension ({})".format(f_value))
+
+        if f_value < -10000:
+            raise Vec2Error("Vector is growing very small in the y dimension ({})".format(f_value))
+
+        self._y = f_value
 
     def normalized(self, origin=None):
         if not self.length():

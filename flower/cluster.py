@@ -1,8 +1,8 @@
 import itertools
 import logging
 
-from flower import constants
 from flower import data
+from flower import params
 from flower import tour
 from flower.point import WorldPositionMixin
 
@@ -15,20 +15,25 @@ class ClusterMixin(WorldPositionMixin):
     def __init__(self):
         WorldPositionMixin.__init__(self)
 
-        self.cluster_id = constants.NOT_CLUSTERED
+        self.cluster_id = params.NOT_CLUSTERED
         self._relay_node = None
         self._nodes = list()
         self._tour = list()
         self._tour_length = 0
 
     def calculate_tour(self):
-        self._tour = tour.find_tour(list(self._nodes), radius=0)
-        self._tour_length = tour.tour_length(self._tour)
+        if not self._nodes:
+            self._tour = []
+            self._tour_length = 0
+        else:
+            self._tour = tour.find_tour(list(self._nodes), radius=0)
+            self._tour_length = tour.tour_length(self._tour)
 
     def update_location(self):
-        com = tour.centroid(self._nodes)
-        self.x = com.x
-        self.y = com.y
+        if self._nodes:
+            com = tour.centroid(self._nodes)
+            self.x = com.x
+            self.y = com.y
 
     @property
     def tour_length(self):
@@ -56,49 +61,74 @@ class ClusterMixin(WorldPositionMixin):
             logging.warning("Re-added %s to %s", node, self)
 
     def remove(self, node):
-        if node not in self._nodes:
-            logging.warning("Invalid attempt to remove %s from %s %s", node, self, self._nodes)
-            raise ClusterError()
-        else:
-            logging.debug("Removing %s from %s", node, self)
-            self._nodes.remove(node)
-            self.update_location()
+        # if node not in self._nodes:
+        #     logging.warning("Invalid attempt to remove %s from %s %s", node, self, self._nodes)
+        #     raise ClusterError()
+        # else:
+
+        logging.debug("Removing %s from %s", node, self)
+        self._nodes.remove(node)
+        self.update_location()
 
     def tour(self):
-        return [n.collection_point for n in self._tour + [self._tour[0]]]
+        return [n.collection_point for n in self._tour]
 
     def tour_nodes(self):
-        return self._tour + [self._tour[0]]
+        return self._tour
 
     def motion_energy(self):
-        cost = constants.MOVEMENT_COST * self.tour_length
+        if not self._nodes:
+            return 0
+
+        cost = params.MOVEMENT_COST * self.tour_length
         return cost
 
     def data_volume(self, other_nodes):
-        all_nodes = self._nodes + other_nodes
-        node_pairs = [(src, dst) for src in all_nodes for dst in all_nodes if src != dst]
+        if not self._nodes:
+            return 0
 
-        # Volume in Mb
-        data_volume = sum(data.data(src, dst) for src, dst in node_pairs)
+        # Volume in megabits
+        data_volume = self.data_volume_mb(other_nodes)
 
         # Volume in bits
         data_volume *= 1024 * 1024
         return data_volume
 
+    def data_volume_mb(self, other_nodes):
+        if not self._nodes:
+            return 0
+
+        output_pairs = [(src, dst) for src in self._nodes for dst in other_nodes]
+        input_pairs = [(src, dst) for src in other_nodes for dst in self._nodes]
+        node_pairs = output_pairs + input_pairs
+
+        # Volume in Mb
+        data_volume = sum(data.data(src, dst) for src, dst in node_pairs)
+        return data_volume
+
     def communication_energy(self, other_nodes):
+        if not self._nodes:
+            return 0
+
         # Volume in bits
         data_volume = self.data_volume(other_nodes)
 
-        e_c = data_volume * (constants.ALPHA + constants.BETA * pow(constants.COMMUNICATION_RANGE, constants.DELTA))
+        e_c = data_volume * (params.ALPHA + params.BETA * pow(params.COMMUNICATION_RANGE, params.DELTA))
         # e_c = data_volume * 2.0 * pow(10, -6)
 
         return e_c
 
     def total_energy(self, other_nodes):
+        if not self._nodes:
+            return 0
+
         total = self.motion_energy() + self.communication_energy(other_nodes)
         return total
 
     def combined(self, other):
+        if not self._nodes:
+            return 0
+
         new_cluster = type(self)()
         new_cluster.nodes = list(set(self.nodes + other.nodes))
         return new_cluster
@@ -137,11 +167,9 @@ class FlowerCluster(ClusterMixin):
         cell.cluster_id = self.cluster_id
 
     def remove(self, cell):
-        if len(self.cells) > 1:
-            super(FlowerCluster, self).remove(cell)
-
+        super(FlowerCluster, self).remove(cell)
         cell.cluster = None
-        cell.cluster_id = constants.NOT_CLUSTERED
+        cell.cluster_id = params.NOT_CLUSTERED
 
     @recent.setter
     def recent(self, value):
@@ -152,21 +180,35 @@ class FlowerCluster(ClusterMixin):
             logging.warning("%r is not a member of %r", value, self)
 
     def calculate_tour(self):
-        cells = list(self.cells)
+        if not self.cells:
+            self._tour = []
+            self._tour_length = 0
+            return
+
+        if len(self.cells) == 1:
+            cells = self.cells + self.central_cluster.cells
+        elif self.anchor:
+            cells = self.cells + [self.anchor]
+        else:
+            cells = list(self.cells)
 
         self._tour = tour.find_tour(cells, radius=0)
         self._tour_length = tour.tour_length(self._tour)
 
     def update_anchor(self):
         # First, remove any cells that don't have our cluster id
-        new_cells = [c for c in self.cells if c.cluster_id == self.cluster_id]
-        if not new_cells:
+        # new_cells = [c for c in self.cells if c.cluster_id == self.cluster_id]
+        # if not new_cells:
+        #     return
+
+        if not self.cells:
+            self.anchor = None
             return
 
         # Now, find the closest cell in the central cluster, and add it to ourselves
-        _, anchor = closest_nodes(new_cells, self.central_cluster, cell_distance=False)
-        new_cells.append(anchor)
-        self.cells = new_cells
+        _, anchor = closest_nodes(self, self.central_cluster, cell_distance=False)
+        # new_cells.append(anchor)
+        # self.cells = new_cells
 
         # self.central_cluster.anchors[self] = anchor
         self.anchor = anchor
@@ -181,7 +223,7 @@ class FlowerVirtualCluster(FlowerCluster):
     def __init__(self):
         super(FlowerVirtualCluster, self).__init__()
 
-        self.virtual_cluster_id = constants.NOT_CLUSTERED
+        self.virtual_cluster_id = params.NOT_CLUSTERED
 
     def __str__(self):
         return "Flower Virtual Cluster {}".format(self.virtual_cluster_id)
@@ -209,6 +251,12 @@ class FlowerHub(FlowerCluster):
 
 
 class FlowerVirtualHub(FlowerVirtualCluster):
+    def calculate_tour(self):
+        cells = list(self.cells)
+
+        self._tour = tour.find_tour(cells, radius=0)
+        self._tour_length = tour.tour_length(self._tour)
+
     def __str__(self):
         return "Flower Virtual Hub Cluster"
 
@@ -235,9 +283,9 @@ class ToCSCluster(ClusterMixin):
 
         if self.rendezvous_point:
             cells.append(self.rendezvous_point)
-            self._tour = tour.find_tour(cells, radius=constants.COMMUNICATION_RANGE, start=self.rendezvous_point)
+            self._tour = tour.find_tour(cells, radius=params.COMMUNICATION_RANGE, start=self.rendezvous_point)
         else:
-            self._tour = tour.find_tour(cells, radius=constants.COMMUNICATION_RANGE)
+            self._tour = tour.find_tour(cells, radius=params.COMMUNICATION_RANGE)
 
         self._tour_length = tour.tour_length(self._tour)
 
@@ -272,7 +320,7 @@ class ToCSCentroid(ToCSCluster):
 
     def calculate_tour(self):
         cells = list(self.rendezvous_points.values()) + self.segments
-        self._tour = tour.find_tour(cells, radius=constants.COMMUNICATION_RANGE)
+        self._tour = tour.find_tour(cells, radius=params.COMMUNICATION_RANGE)
         self._tour_length = tour.tour_length(self._tour)
 
     def add(self, segment):

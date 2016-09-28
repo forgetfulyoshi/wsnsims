@@ -5,13 +5,16 @@ import statistics
 import matplotlib.pyplot as plt
 
 from flower import cluster
-from flower import constants
 from flower import grid
+from flower import params
 from flower import point
 from flower import segment
 from flower import tocs_runner
 
-logging.basicConfig(level=logging.DEBUG)
+# logging.basicConfig(level=logging.DEBUG)
+
+
+MAX_ROUNDS = 100
 
 
 class ToCS(object):
@@ -27,15 +30,15 @@ class ToCS(object):
 
         self.centroid = cluster.ToCSCentroid(self.virtual_center_segment)
 
-        self.isdva = constants.ISDVA  # Mb
-        self.isdvsd = constants.ISDVSD
+        self.isdva = params.ISDVA  # Mb
+        self.isdvsd = params.ISDVSD
         self.clusters = list()
-        self.mdc_speed = 0.1  # meters / second
-        self.transmission_rate = 0.1  # Mbps
+        self.mdc_speed = params.MDC_SPEED
+        self.transmission_rate = params.TRANSMISSION_RATE
 
-        self.mdc_energy = 1000  # Joule
-        self.movement_cost = 1.0  # Joule / meter
-        self.comms_cost = 2.0  # Joule / Mbit
+        self.mdc_energy = params.INITIAL_ENERGY
+        self.movement_cost = params.MOVEMENT_COST
+        self.comms_cost = params.COMMS_COST
 
     def show_state(self):
         # show all segments
@@ -59,12 +62,12 @@ class ToCS(object):
 
     def set_up(self):
 
-        while len(self.segments) < constants.SEGMENT_COUNT:
+        while len(self.segments) < params.SEGMENT_COUNT:
             x_pos = random.random() * self.grid.width
             y_pos = random.random() * self.grid.hieght
 
             dist_from_center = (point.Vec2(x_pos, y_pos) - self.virtual_center_segment).length()
-            if dist_from_center < constants.DAMAGE_RADIUS:
+            if dist_from_center < params.DAMAGE_RADIUS:
                 continue
 
             seg = segment.Segment(x_pos, y_pos)
@@ -82,7 +85,7 @@ class ToCS(object):
             c.calculate_tour()
             clusters.append(c)
 
-        while len(clusters) >= constants.MDC_COUNT:
+        while len(clusters) >= params.MDC_COUNT:
             logging.info("Current Clusters: %r", clusters)
             clusters = cluster.combine_clusters(clusters, self.centroid)
             [c.calculate_tour() for c in clusters]
@@ -124,7 +127,9 @@ class ToCS(object):
 
     def optimize_rendezvous_points(self):
 
+        rounds = 0
         while True:
+            rounds += 1
             atl = self.average_tour_length()
 
             long_clusters = [c for c in self.clusters if c.tour_length > atl + 500.0]
@@ -133,25 +138,39 @@ class ToCS(object):
                 logging.info("All clusters optimized")
                 break
 
+            if rounds > MAX_ROUNDS:
+                break
+
             for c in long_clusters:
                 while c.tour_length > atl + 500.0:
+                    rounds += 1
+
                     # Move the rendezvous point closer to Ci
                     logging.info("Moving rendezvous point for %r toward %r", c, c)
 
-                    self.show_state()
+                    if rounds > MAX_ROUNDS:
+                        # self.show_state()
+                        # logging.info(long_clusters)
+                        break
 
+                    max_length = c.distance(self.virtual_center_segment)
                     rendezvous_vector = c.rendezvous_point - self.virtual_center_segment
-                    rendezvous_vector.scale(1.2)
+                    rendezvous_vector.set_length(min(1.2 * rendezvous_vector.length(), max_length))
                     rendezvous_vector += self.virtual_center_segment
 
-                    c.rendezvous_point = rendezvous_vector
+                    # Make sure we can treat this as a "virtual segment"
+                    rendezvous_point = segment.Segment(rendezvous_vector.x, rendezvous_vector.y)
+                    rendezvous_point.is_virtual = True
+                    rendezvous_point.cluster = self.centroid
+
+                    c.rendezvous_point = rendezvous_point
                     self.centroid.rendezvous_points[c] = c.rendezvous_point
 
                     # Update the tour paths for both Ci and Cn
                     c.calculate_tour()
                     self.centroid.calculate_tour()
 
-                    c_tour = c.tour_clusters()
+                    c_tour = c.tour_nodes()
                     closest, _ = cluster.closest_points(c_tour, [self.virtual_center_segment])
                     closest_index = c_tour.index(closest)
                     if point.direction(c_tour[(closest_index + 1) % len(c_tour)], closest, c.rendezvous_point) > 0:
@@ -179,10 +198,16 @@ class ToCS(object):
 
                             rendezvous_point = min(decorated)[2]
 
-                        c.rendezvous_point = rendezvous_point - self.virtual_center_segment
-                        c.rendezvous_point.scale(0.5)
-                        c.rendezvous_point += self.virtual_center_segment
+                        rendezvous_vector = rendezvous_point - self.virtual_center_segment
+                        rendezvous_vector.scale(0.5)
+                        rendezvous_vector += self.virtual_center_segment
 
+                        # Make sure we can treat this as a "virtual segment"
+                        rendezvous_point = segment.Segment(rendezvous_vector.x, rendezvous_vector.y)
+                        rendezvous_point.is_virtual = True
+                        rendezvous_point.cluster = self.centroid
+
+                        c.rendezvous_point = rendezvous_point
                         self.centroid.rendezvous_points[c] = c.rendezvous_point
 
                         # Update the tours
@@ -191,16 +216,25 @@ class ToCS(object):
 
             for c in short_clusters:
                 while c.tour_length < atl - 500.0:
+                    rounds += 1
+
                     # Move the rendezvous point closer to the centroid
                     logging.info("Moving rendezvous point for %r toward %r", c, self.centroid)
 
-                    self.show_state()
+                    if rounds > 100:
+                        # self.show_state()
+                        break
 
                     rendezvous_vector = c.rendezvous_point - self.centroid
                     rendezvous_vector.scale(0.8)
                     rendezvous_vector += self.centroid
 
-                    c.rendezvous_point = rendezvous_vector
+                    # Make sure we can treat this as a "virtual segment"
+                    rendezvous_point = segment.Segment(rendezvous_vector.x, rendezvous_vector.y)
+                    rendezvous_point.is_virtual = True
+                    rendezvous_point.cluster = self.centroid
+
+                    c.rendezvous_point = rendezvous_point
                     self.centroid.rendezvous_points[c] = c.rendezvous_point
 
                     # Update the tour paths for both Ci and Cn
@@ -215,6 +249,21 @@ class ToCS(object):
         # Find the average tour length and return it
         average_tour_length = statistics.mean(c.tour_length for c in clusters)
         return average_tour_length
+
+    def compute_paths(self):
+        self.set_up()
+        self.create_clusters()
+        # sim.show_state()
+        self.find_initial_rendezvous_points()
+        # logging.info("Average tour length: %f", self.average_tour_length())
+        # self.show_state()
+        self.optimize_rendezvous_points()
+        # self.show_state()
+        return self
+
+    def run(self):
+        sim = self.compute_paths()
+        return tocs_runner.run_sim(sim)
 
 
 def plot(points, *args, **kwargs):
@@ -234,22 +283,9 @@ def scatter(points, radius):
     plt.axis('scaled')
 
 
-def compute_paths():
-    sim = ToCS()
-    sim.set_up()
-    sim.create_clusters()
-    sim.show_state()
-    sim.find_initial_rendezvous_points()
-    logging.info("Average tour length: %f", sim.average_tour_length())
-    # sim.show_state()
-    # sim.optimize_rendezvous_points()
-    # sim.show_state()
-    return sim
-
-
 def main():
-    sim = compute_paths()
-    tocs_runner.run_sim(sim)
+    sim = ToCS()
+    sim.run()
 
 
 if __name__ == '__main__':
