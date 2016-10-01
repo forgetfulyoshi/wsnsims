@@ -77,52 +77,31 @@ class ClusterMixin(WorldPositionMixin):
         return self._tour
 
     def motion_energy(self):
-        if not self._nodes:
-            return 0
-
         cost = params.MOVEMENT_COST * self.tour_length
         return cost
 
-    def data_volume(self, other_nodes):
-        if not self._nodes:
-            return 0
-
+    def data_volume_bits(self, all_clusters, all_nodes):
         # Volume in megabits
-        data_volume = self.data_volume_mb(other_nodes)
+        data_volume = self.data_volume_mbits(all_clusters, all_nodes)
 
         # Volume in bits
         data_volume *= 1024 * 1024
         return data_volume
 
-    def data_volume_mb(self, other_nodes):
-        if not self._nodes:
-            return 0
+    def data_volume_mbits(self, all_clusters, all_nodes):
+        raise NotImplementedError()
 
-        output_pairs = [(src, dst) for src in self._nodes for dst in other_nodes]
-        input_pairs = [(src, dst) for src in other_nodes for dst in self._nodes]
-        node_pairs = output_pairs + input_pairs
-
-        # Volume in Mb
-        data_volume = sum(data.data(src, dst) for src, dst in node_pairs)
-        return data_volume
-
-    def communication_energy(self, other_nodes):
-        if not self._nodes:
-            return 0
-
+    def communication_energy(self, all_clusters, all_nodes):
         # Volume in bits
-        data_volume = self.data_volume(other_nodes)
+        data_volume = self.data_volume_bits(all_clusters, all_nodes)
 
         e_c = data_volume * (params.ALPHA + params.BETA * pow(params.COMMUNICATION_RANGE, params.DELTA))
         # e_c = data_volume * 2.0 * pow(10, -6)
 
         return e_c
 
-    def total_energy(self, other_nodes):
-        if not self._nodes:
-            return 0
-
-        total = self.motion_energy() + self.communication_energy(other_nodes)
+    def total_energy(self, all_clusters, all_nodes):
+        total = self.motion_energy() + self.communication_energy(all_clusters, all_nodes)
         return total
 
     def combined(self, other):
@@ -218,6 +197,27 @@ class FlowerCluster(ClusterMixin):
         new_cluster.central_cluster = self.central_cluster
         return new_cluster
 
+    def data_volume_mbits(self, all_clusters, all_cells):
+        if not self.cells:
+            return 0
+
+        # Handle all intra-cluster data
+        cluster_cells = [c for c in all_cells if c.cluster_id == self.cluster_id]
+        cluster_segs = [seg for segs in [c.segments for c in cluster_cells] for seg in segs]
+        intracluster_seg_pairs = [(src, dst) for src in cluster_segs for dst in cluster_segs if src != dst]
+        data_vol = sum([data.data(src, dst) for src, dst in intracluster_seg_pairs])
+
+        # Handle inter-cluster data at the anchor
+        other_cells = [c for c in all_cells if c.cluster_id != self.cluster_id]
+        other_segs = [seg for segs in [c.segments for c in other_cells] for seg in segs]
+        intercluster_seg_pairs = [(src, dst) for src in cluster_segs for dst in other_segs]
+        intercluster_seg_pairs += [(src, dst) for src in other_segs for dst in cluster_segs]
+
+        # data volume for inter-cluster traffic
+        data_vol += sum(data.data(src, dst) for src, dst in intercluster_seg_pairs)
+
+        return data_vol
+
 
 class FlowerVirtualCluster(FlowerCluster):
     def __init__(self):
@@ -230,6 +230,37 @@ class FlowerVirtualCluster(FlowerCluster):
 
     def __repr__(self):
         return "FVC{}".format(self.virtual_cluster_id)
+
+    def calculate_tour(self):
+        if not self.cells:
+            self._tour = []
+            self._tour_length = 0
+            return
+
+        cells = self.cells + self.central_cluster.cells
+        self._tour = tour.find_tour(cells, radius=0)
+        self._tour_length = tour.tour_length(self._tour)
+
+    def data_volume_mbits(self, all_clusters, all_cells):
+        if not self.cells:
+            return 0
+
+        # Handle all intra-cluster data
+        cluster_cells = [c for c in all_cells if c.virtual_cluster_id == self.virtual_cluster_id]
+        cluster_segs = [seg for segs in [c.segments for c in cluster_cells] for seg in segs]
+        intracluster_seg_pairs = [(src, dst) for src in cluster_segs for dst in cluster_segs if src != dst]
+        data_vol = sum([data.data(src, dst) for src, dst in intracluster_seg_pairs])
+
+        # Handle inter-cluster data at the anchor
+        other_cells = [c for c in all_cells if c.virtual_cluster_id != self.virtual_cluster_id]
+        other_segs = [seg for segs in [c.segments for c in other_cells] for seg in segs]
+        intercluster_seg_pairs = [(src, dst) for src in cluster_segs for dst in other_segs]
+        intercluster_seg_pairs += [(src, dst) for src in other_segs for dst in cluster_segs]
+
+        # data volume for inter-cluster traffic
+        data_vol += sum(data.data(src, dst) for src, dst in intercluster_seg_pairs)
+
+        return data_vol
 
 
 class FlowerHub(FlowerCluster):
@@ -249,6 +280,44 @@ class FlowerHub(FlowerCluster):
     def __repr__(self):
         return "FH"
 
+    def data_volume_mbits(self, all_clusters, all_cells):
+        if not self.cells:
+            return 0
+
+        # Handle all intra-cluster data for the hub
+        hub_cells = [c for c in all_cells if c.cluster_id == self.cluster_id]
+        hub_segs = [seg for segs in [c.segments for c in hub_cells] for seg in segs]
+        hub_seg_pairs = [(src, dst) for src in hub_segs for dst in hub_segs if src != dst]
+        data_vol = sum([data.data(src, dst) for src, dst in hub_seg_pairs])
+
+        # Handle inter-cluster data for other clusters
+        anchor_cells = [a for a in [c.anchor for c in all_clusters if c.cluster_id != self.cluster_id]]
+        anchor_cells = list(set(anchor_cells))
+        for cell in anchor_cells:
+            # Get the segments served by this anchor
+            local_clusters = [c for c in all_clusters if c.anchor == cell]
+            local_cells = [c for c in all_cells if c.cluster_id in [clust.cluster_id for clust in local_clusters]]
+            local_segs = [seg for segs in [c.segments for c in local_cells] for seg in segs]
+
+            # Get the segments not served by this anchor
+            remote_clusters = [c for c in all_clusters if c.anchor != cell and c != self]
+            remote_cells = [c for c in all_cells if c.cluster_id in [clust.cluster_id for clust in remote_clusters]]
+            remote_segs = [seg for segs in [c.segments for c in remote_cells] for seg in segs]
+
+            # Generate the pairs of local-to-remote segments
+            seg_pairs = [(seg_1, seg_2) for seg_1 in local_segs for seg_2 in remote_segs]
+
+            # Generate the pairs of remote-to-local segments
+            seg_pairs += [(seg_1, seg_2) for seg_1 in remote_segs for seg_2 in local_segs]
+
+            # Add the inter-cluster data volume
+            data_vol += sum(data.data(src, dst) for src, dst in seg_pairs)
+
+        # Handle inter-cluster data for the hub itself
+        # This is done by the above loop
+
+        return data_vol
+
 
 class FlowerVirtualHub(FlowerVirtualCluster):
     def calculate_tour(self):
@@ -262,6 +331,9 @@ class FlowerVirtualHub(FlowerVirtualCluster):
 
     def __repr__(self):
         return "FVH"
+
+    def data_volume_mbits(self, all_clusters, all_cells):
+        return 0
 
 
 class ToCSCluster(ClusterMixin):
@@ -297,6 +369,25 @@ class ToCSCluster(ClusterMixin):
         super(ToCSCluster, self).remove(segment)
         segment.cluster = None
 
+    def data_volume_mbits(self, all_clusters, all_segments):
+        if not self.segments:
+            return 0
+
+        # Handle all intra-cluster data
+        cluster_segs = self.segments
+        intracluster_seg_pairs = [(src, dst) for src in cluster_segs for dst in cluster_segs if src != dst]
+        data_vol = sum([data.data(src, dst) for src, dst in intracluster_seg_pairs])
+
+        # Handle inter-cluster data at the rendezvous point
+        other_segs = [c for c in all_segments if c.cluster != self]
+        intercluster_seg_pairs = [(src, dst) for src in cluster_segs for dst in other_segs]
+        intercluster_seg_pairs += [(src, dst) for src in other_segs for dst in cluster_segs]
+
+        # data volume for inter-cluster traffic
+        data_vol += sum(data.data(src, dst) for src, dst in intercluster_seg_pairs)
+
+        return data_vol
+
     def __str__(self):
         return "ToCS Cluster {}".format(self.cluster_id)
 
@@ -330,6 +421,35 @@ class ToCSCentroid(ToCSCluster):
     def remove(self, segment):
         super(ToCSCentroid, self).remove(segment)
         segment.cluster = None
+
+    def data_volume_mbits(self, all_clusters, all_segments):
+
+        # Handle all intra-cluster data for the hub
+        if self.segments:
+            hub_segs = self.segments
+            hub_seg_pairs = [(src, dst) for src in hub_segs for dst in hub_segs if src != dst]
+            data_vol = sum([data.data(src, dst) for src, dst in hub_seg_pairs])
+        else:
+            data_vol = 0
+
+        # Handle inter-cluster data for other clusters
+        for clust, _ in self.rendezvous_points.items():
+            local_segs = clust.segments
+            remote_segs = [seg for seg in all_segments if seg.cluster != clust]
+
+            # Generate the pairs of local-to-remote segments
+            seg_pairs = [(seg_1, seg_2) for seg_1 in local_segs for seg_2 in remote_segs]
+
+            # Generate the pairs of remote-to-local segments
+            seg_pairs += [(seg_1, seg_2) for seg_1 in remote_segs for seg_2 in local_segs]
+
+            # Add the inter-cluster data volume
+            data_vol += sum(data.data(src, dst) for src, dst in seg_pairs)
+
+        # Handle inter-cluster data for the hub itself
+        # This is done by the above loop
+
+        return data_vol
 
     def __str__(self):
         return "ToCS Centroid"

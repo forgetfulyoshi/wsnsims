@@ -5,13 +5,13 @@ import math
 # Parameters as specified in the paper
 GRID_WIDTH = 1200  # meters
 GRID_HEIGHT = 1200  # meters
-COMMUNICATION_RANGE = 50 # 200.0 # meters
+COMMUNICATION_RANGE = 100 # 200.0 # meters
 SEGMENT_COUNT = 12  # 20
-MDC_COUNT = 3  # 5
+MDC_COUNT = 5  # 5
 ISDVA = 45  # Mbits
 ISDVSD = 3
 MOVEMENT_COST = 1  # Joule / meter
-INITIAL_ENERGY = 1000  # Joule
+INITIAL_ENERGY = 100000  # Joule
 MDC_SPEED = 0.1  # meter / second
 TRANSMISSION_RATE = 0.1  # Mbit / sec
 

@@ -231,8 +231,7 @@ class FlowerSim(object):
     def compute_total_energy(self, clusters):
         for c in clusters:
             self.mechanical_energy += c.motion_energy()
-            other_segments = [s for s in self.segments if s.cluster != c]
-            self.communication_energy += c.communication_energy(other_segments)
+            self.communication_energy += c.communication_energy(clusters, self.cells)
 
         logging.info("Total motion energy: %f", self.mechanical_energy)
         logging.info("Total communication energy: %f", self.communication_energy)
@@ -455,8 +454,7 @@ class FlowerSim(object):
                 # [c.update_anchor() for c in self.clusters]
 
     def total_cluster_energy(self, c):
-        other_segments = [s for s in self.segments if s.cluster != c]
-        return c.total_energy(other_segments)
+        return c.total_energy(self.clusters, self.cells)
 
     def optimization(self):
 

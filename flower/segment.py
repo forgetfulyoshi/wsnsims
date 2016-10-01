@@ -2,7 +2,7 @@ import random
 
 import flower.point
 from flower.sensor import Packet
-
+from flower import params
 
 class Segment(flower.point.WorldPositionMixin):
     count = 0
@@ -14,6 +14,7 @@ class Segment(flower.point.WorldPositionMixin):
         Segment.count += 1
 
         self.cluster = None
+        self.cluster_id = params.NOT_CLUSTERED
 
         self.is_virtual = False
         self.buffer = []

@@ -76,10 +76,10 @@ def comm_delay(src_segment, dst_segment, sim):
         d_r = 0
     elif (src_segment.cell.cluster_id == sim.hub.cluster_id) or (dst_segment.cell.cluster_id == sim.hub.cluster_id):
         multiplier = 2
-        d_r = holding_time(src_segment, dst_segment, sim)
+        d_r = hold_time(src_segment, dst_segment, sim)
     else:
         multiplier = 3
-        d_r = holding_time(src_segment, dst_segment, sim)
+        d_r = hold_time(src_segment, dst_segment, sim)
 
     d_c = multiplier / sim.transmission_rate * data.data(src_segment, dst_segment)
 
@@ -96,6 +96,40 @@ def segment_cluster(seg, sim):
 def cell_cluster(cell, sim):
     c_cluster = next(c for c in sim.clusters + [sim.hub] if c.cluster_id == cell.cluster_id)
     return c_cluster
+
+
+def tour_time(clust, sim):
+    cluster_tour = clust.tour_nodes()
+    if len(cluster_tour) > 1:
+
+        t_time = clust.communication_energy(sim.clusters + [sim.hub], sim.cells)
+        t_time /= sim.comms_cost
+        t_time /= sim.transmission_rate
+        t_time += clust.tour_length / sim.mdc_speed
+    else:
+        t_time = 0
+
+    return t_time
+
+
+def hold_time(src_segment, dst_segment, sim):
+    src_cluster = segment_cluster(src_segment, sim)
+    dst_cluster = segment_cluster(dst_segment, sim)
+
+    if src_cluster == dst_cluster:
+        return 0
+
+    if src_cluster.anchor == dst_cluster.anchor:
+        return tour_time(dst_cluster, sim)
+
+    if src_cluster == sim.hub:
+        return tour_time(dst_cluster, sim)
+
+    if dst_cluster == sim.hub:
+        return tour_time(sim.hub, sim)
+
+    if src_cluster.anchor != dst_cluster.anchor:
+        return tour_time(sim.hub, sim) + tour_time(dst_cluster, sim)
 
 
 def holding_time(src_segment, dst_segment, sim):
@@ -169,10 +203,7 @@ def mdc_energy_balance(simulation_data):
     energy = list()
     clusters = simulation_data.clusters + [simulation_data.hub]
     for c in clusters:
-        e_m = c.motion_energy()
-        e_c = c.communication_energy([segment for segment in simulation_data.segments if segment.cluster != c])
-
-        mdc_energy = e_m + e_c
+        mdc_energy = c.total_energy(clusters, simulation_data.cells)
         energy.append(mdc_energy)
 
     energy_balance = statistics.pstdev(energy)
@@ -264,63 +295,73 @@ def network_lifetime(sim):
 
 
 def average_total_mdc_energy_consumption(sim):
-    lifetime, _, _ = min(network_lifetime(sim))
-    timestamps = compute_timestamps(sim)
     all_clusters = sim.clusters + [sim.hub]
-    energy_data = []
-
+    total_energy = 0
     for clust in all_clusters:
-        total_energy = 0
-        remaining_time = lifetime
-        clust_tour = timestamps[clust]
-        idx = 0
-        while remaining_time > 0:
+        total_energy += clust.total_energy(all_clusters=all_clusters, all_nodes=sim.cells)
 
-            cell_ts = clust_tour[idx]
-            next_cell_ts = clust_tour[(idx + 1) % len(clust_tour)]
+    average_energy = total_energy / len(all_clusters)
+    return average_energy
 
-            if (idx + 1) % len(clust_tour) == 0:
-                circuit_time = clust_tour[idx].leave
-                for entry in clust_tour:
-                    updated_arrive = entry.arrive + circuit_time
-                    updated_leave = entry.leave + circuit_time
-                    clust_tour[clust_tour.index(entry)] = entry._replace(arrive=updated_arrive, leave=updated_leave)
 
-            idx = (idx + 1) % len(clust_tour)
-
-            if math.floor(cell_ts.distance) > 0:
-                motion_time = next_cell_ts.arrive - cell_ts.leave
-                motion_energy = cell_ts.distance * sim.movement_cost
-                if motion_time < remaining_time:
-                    remaining_time -= motion_time
-                    total_energy += motion_energy
-
-                else:
-                    motion_percentage = remaining_time / motion_time
-                    total_energy += motion_energy * motion_percentage
-                    remaining_time = 0
-
-            if remaining_time <= 0:
-                break
-
-            data_volume = cell_ts.upload + cell_ts.download
-            comms_energy = data_volume * sim.comms_cost
-            comms_time = cell_ts.leave - cell_ts.arrive
-
-            if comms_time < remaining_time:
-                total_energy += comms_energy
-                remaining_time -= comms_time
-
-            else:
-                comms_percentage = remaining_time / comms_time
-                total_energy += comms_energy * comms_percentage
-                remaining_time = 0
-
-        energy_data.append((total_energy, clust.cluster_id, clust))
-
-    energies = [e for e, _, _ in energy_data]
-    mean = statistics.mean(energies)
-    return mean
+# def average_total_mdc_energy_consumption(sim):
+#     lifetime, _, _ = min(network_lifetime(sim))
+#     timestamps = compute_timestamps(sim)
+#     all_clusters = sim.clusters + [sim.hub]
+#     energy_data = []
+#
+#     for clust in all_clusters:
+#         total_energy = 0
+#         remaining_time = lifetime
+#         clust_tour = timestamps[clust]
+#         idx = 0
+#         while remaining_time > 0:
+#
+#             cell_ts = clust_tour[idx]
+#             next_cell_ts = clust_tour[(idx + 1) % len(clust_tour)]
+#
+#             if (idx + 1) % len(clust_tour) == 0:
+#                 circuit_time = clust_tour[idx].leave
+#                 for entry in clust_tour:
+#                     updated_arrive = entry.arrive + circuit_time
+#                     updated_leave = entry.leave + circuit_time
+#                     clust_tour[clust_tour.index(entry)] = entry._replace(arrive=updated_arrive, leave=updated_leave)
+#
+#             idx = (idx + 1) % len(clust_tour)
+#
+#             if math.floor(cell_ts.distance) > 0:
+#                 motion_time = next_cell_ts.arrive - cell_ts.leave
+#                 motion_energy = cell_ts.distance * sim.movement_cost
+#                 if motion_time < remaining_time:
+#                     remaining_time -= motion_time
+#                     total_energy += motion_energy
+#
+#                 else:
+#                     motion_percentage = remaining_time / motion_time
+#                     total_energy += motion_energy * motion_percentage
+#                     remaining_time = 0
+#
+#             if remaining_time <= 0:
+#                 break
+#
+#             data_volume = cell_ts.upload + cell_ts.download
+#             comms_energy = data_volume * sim.comms_cost
+#             comms_time = cell_ts.leave - cell_ts.arrive
+#
+#             if comms_time < remaining_time:
+#                 total_energy += comms_energy
+#                 remaining_time -= comms_time
+#
+#             else:
+#                 comms_percentage = remaining_time / comms_time
+#                 total_energy += comms_energy * comms_percentage
+#                 remaining_time = 0
+#
+#         energy_data.append((total_energy, clust.cluster_id, clust))
+#
+#     energies = [e for e, _, _ in energy_data]
+#     mean = statistics.mean(energies)
+#     return mean
 
 
 def buffer_space_required(sim):
@@ -368,10 +409,7 @@ def compute_timestamps(sim, rounds=1):
     for clust in sim.clusters:
         timestamp = 0
         tour = clust.tour_nodes()
-
-        segs = []
-        for c in clust.cells:
-            segs.extend(c.segments)
+        local_segs = [seg for segs in [c.segments for c in clust.cells] for seg in segs]
 
         for _ in range(rounds):
             for idx, cell in enumerate(tour):
@@ -384,8 +422,10 @@ def compute_timestamps(sim, rounds=1):
                     download_size = sum(download)
 
                     if cell in sim.hub.cells:
-                        outbound = sum(data.data(src, dst) for src in segs for dst in sim.segments if dst not in segs)
-                        inbound = sum(data.data(src, dst) for src in sim.segments for dst in segs if src not in segs)
+                        outbound = sum(
+                            data.data(src, dst) for src in local_segs for dst in sim.segments if dst not in local_segs)
+                        inbound = sum(
+                            data.data(src, dst) for src in sim.segments for dst in local_segs if src not in local_segs)
 
                         upload_size += outbound
                         download_size += inbound
@@ -421,20 +461,20 @@ def compute_timestamps(sim, rounds=1):
                 ul_clusters = [c for c in sim.clusters if c not in dl_clusters]
 
                 for dl_cluster in dl_clusters:
-                    segs = []
+                    local_segs = []
                     for c in dl_cluster.cells:
-                        segs.extend(c.segments)
+                        local_segs.extend(c.segments)
 
-                    others = [s for s in sim.segments if s not in segs]
-                    download_size += sum(data.data(src, dst) for src in segs for dst in others)
+                    others = [s for s in sim.segments if s not in local_segs]
+                    download_size += sum(data.data(src, dst) for src in local_segs for dst in others)
 
                 for ul_cluster in ul_clusters:
-                    segs = []
+                    local_segs = []
                     for c in ul_cluster.cells:
-                        segs.extend(c.segments)
+                        local_segs.extend(c.segments)
 
-                    others = [s for s in sim.segments if s not in segs]
-                    upload_size += sum(data.data(src, dst) for src in others for dst in segs)
+                    others = [s for s in sim.segments if s not in local_segs]
+                    upload_size += sum(data.data(src, dst) for src in others for dst in local_segs)
 
                 total_size = download_size + upload_size
                 comms_time = total_size / sim.transmission_rate
@@ -465,9 +505,9 @@ def compute_timestamps(sim, rounds=1):
 
 
 def run_sim(simulation_data):
-    timestamps = compute_timestamps(simulation_data, 1)
-    for k, v in timestamps.items():
-        logging.info(str(k) + '\n' + '\n'.join([str(ts) for ts in v]) + '\n')
+    # timestamps = compute_timestamps(simulation_data, 1)
+    # for k, v in timestamps.items():
+    #     logging.info(str(k) + '\n' + '\n'.join([str(ts) for ts in v]) + '\n')
 
     max_delay, mean = max_intersegment_comm_delay(simulation_data)
     logging.info("Maximum delay is: %f", max_delay)
@@ -476,16 +516,17 @@ def run_sim(simulation_data):
     energy_balance = mdc_energy_balance(simulation_data)
     logging.info("Energy balance is: %f", energy_balance)
 
-    lifetime, _, _ = min(network_lifetime(simulation_data))
-    logging.info("Network lifetime is: %f", lifetime)
+    # lifetime, _, _ = min(network_lifetime(simulation_data))
+    # logging.info("Network lifetime is: %f", lifetime)
 
     average_energy = average_total_mdc_energy_consumption(simulation_data)
     logging.info("Average MDC energy consumption: %f", average_energy)
 
-    max_buffer_size = buffer_space_required(simulation_data)
-    logging.info("Maximum buffer size: %f", max_buffer_size)
+    # max_buffer_size = buffer_space_required(simulation_data)
+    # logging.info("Maximum buffer size: %f", max_buffer_size)
 
-    results = Results(max_delay, energy_balance, lifetime, average_energy, max_buffer_size)
+    # results = Results(max_delay, energy_balance, lifetime, average_energy, max_buffer_size)
+    results = Results(max_delay, energy_balance, 0, average_energy, 0)
 
     for r in results:
         if math.isnan(r):
