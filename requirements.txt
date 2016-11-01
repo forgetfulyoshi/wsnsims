@@ -1,2 +1,5 @@
 matplotlib
 nose
+numpy
+quantities
+scipy
