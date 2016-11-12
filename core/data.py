@@ -1,6 +1,6 @@
 import random
 
-from flower import params
+from core import params
 
 data_memo = {}
 

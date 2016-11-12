@@ -2,11 +2,9 @@ import random
 import unittest
 from operator import attrgetter
 
-# import matplotlib.pyplot as plt
-
+from core._tour import find_tour
+from core._tour import tour_length
 from flower.grid import Cell
-from flower.tour import find_tour
-from flower.tour import tour_length
 
 
 class TourTests(unittest.TestCase):

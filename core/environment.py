@@ -2,7 +2,22 @@ import numpy as np
 import quantities as pq
 
 
-class Environment(object):
+class SingletonDecorator:
+    """
+    From http://python-3-patterns-idioms-test.readthedocs.io/en/latest/Singleton.html
+    """
+
+    def __init__(self, klass):
+        self.klass = klass
+        self.instance = None
+
+    def __call__(self, *args, **kwds):
+        if not self.instance:
+            self.instance = self.klass(*args, **kwds)
+        return self.instance
+
+
+class _Environment(object):
     def __init__(self):
         # Common things to change
         self.mdc_count = 5
@@ -31,3 +46,6 @@ class Environment(object):
         j = self.alpha + self.beta * np.power(self.comms_range, self.delta)
         jpb = j / (pq.mebi * pq.bit)
         return jpb
+
+
+Environment = SingletonDecorator(_Environment)

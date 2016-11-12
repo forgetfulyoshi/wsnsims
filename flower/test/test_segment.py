@@ -1,7 +1,7 @@
 import unittest
 
-from flower.segment import Segment
-from flower.segment import initialize_traffic
+from core.segment import Segment
+from core.segment import initialize_traffic
 
 
 class SegmentTests(unittest.TestCase):

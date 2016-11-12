@@ -4,9 +4,9 @@ import math
 import statistics
 from collections import defaultdict
 
-from flower import data
+from core import data, point
+from core.results import Results
 from flower import point
-from flower.results import Results
 
 # logging.basicConfig(level=logging.DEBUG)
 
@@ -466,7 +466,8 @@ def compute_timestamps(sim, rounds=1):
                         local_segs.extend(c.segments)
 
                     others = [s for s in sim.segments if s not in local_segs]
-                    download_size += sum(data.data(src, dst) for src in local_segs for dst in others)
+                    download_size += sum(
+                        data.data(src, dst) for src in local_segs for dst in others)
 
                 for ul_cluster in ul_clusters:
                     local_segs = []
@@ -474,7 +475,8 @@ def compute_timestamps(sim, rounds=1):
                         local_segs.extend(c.segments)
 
                     others = [s for s in sim.segments if s not in local_segs]
-                    upload_size += sum(data.data(src, dst) for src in others for dst in local_segs)
+                    upload_size += sum(
+                        data.data(src, dst) for src in others for dst in local_segs)
 
                 total_size = download_size + upload_size
                 comms_time = total_size / sim.transmission_rate

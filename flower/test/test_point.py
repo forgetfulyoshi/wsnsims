@@ -2,12 +2,12 @@ import random
 import unittest
 from operator import attrgetter
 
+from core.point import Vec2
+from core.point import direction
+from core.point import graham_scan
+from core.point import rotate_to_start
+from core.point import sort_polar
 from flower.grid import Cell
-from flower.point import Vec2
-from flower.point import direction
-from flower.point import graham_scan
-from flower.point import rotate_to_start
-from flower.point import sort_polar
 
 
 class Vec2Tests(unittest.TestCase):
@@ -56,12 +56,12 @@ class Vec2Tests(unittest.TestCase):
     def test_grow(self):
         vec = Vec2(1, 1)
         vec.set_length(5)
-        self.assertAlmostEqual(5, vec.length())
+        self.assertAlmostEqual(5, vec.norm())
 
     def test_shrink(self):
         vec = Vec2(10, 10)
         vec.set_length(3)
-        self.assertAlmostEqual(3, vec.length())
+        self.assertAlmostEqual(3, vec.norm())
 
     def test_dot_product(self):
         vec1 = Vec2(3, 8)

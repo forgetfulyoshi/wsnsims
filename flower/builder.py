@@ -6,15 +6,10 @@ import statistics
 
 import matplotlib.pyplot as plt
 
-from flower import cluster
+import flower.cluster
+from core import segment, cluster, point, params, builder
 from flower import flower_runner
 from flower import grid
-from flower import params
-from flower import point
-from flower import segment
-
-
-# logging.basicConfig(level=logging.DEBUG)
 
 
 def much_greater_than(lhs, rhs, r=0.2):
@@ -28,8 +23,10 @@ class FlowerError(Exception):
     pass
 
 
-class FlowerSim(object):
-    def __init__(self):
+class FlowerBuilder(builder.BaseBuilder):
+    def __init__(self, segments, environment):
+
+        super(FlowerBuilder, self).__init__(segments, environment)
 
         self.grid = grid.Grid(params.GRID_WIDTH, params.GRID_HEIGHT)
         self.damaged = self.grid.center()
@@ -45,22 +42,16 @@ class FlowerSim(object):
         # area
         virtual_center_cell = self.damaged
 
-        self.virtual_hub = cluster.FlowerVirtualHub()
+        self.virtual_hub = flower.cluster.FlowerVirtualHub()
         self.virtual_hub.add(virtual_center_cell)
         self.virtual_hub.virtual_cluster_id = params.MDC_COUNT
         virtual_center_cell.virtual_cluster_id = params.MDC_COUNT
 
-        self.hub = cluster.FlowerHub()
+        self.hub = flower.cluster.FlowerHub()
         self.hub.add(virtual_center_cell)
         self.hub.recent = virtual_center_cell
         self.hub.cluster_id = params.MDC_COUNT
         virtual_center_cell.cluster_id = params.MDC_COUNT
-
-        self.mdc_energy = params.INITIAL_ENERGY
-        self.mdc_speed = params.MDC_SPEED
-        self.transmission_rate = params.TRANSMISSION_RATE
-        self.movement_cost = params.MOVEMENT_COST
-        self.comms_cost = params.COMMS_COST
 
         self.em_is_large = False
         self.ec_is_large = False
@@ -96,22 +87,6 @@ class FlowerSim(object):
         plot([self.damaged], 'go')
 
         plt.show()
-
-    def init_segments(self):
-
-        while len(self.segments) < params.SEGMENT_COUNT:
-            x_pos = random.random() * self.grid.width
-            y_pos = random.random() * self.grid.hieght
-
-            dist_from_center = (point.Vec2(x_pos, y_pos) - self.damaged).length()
-            if dist_from_center < params.DAMAGE_RADIUS:
-                continue
-
-            seg = segment.FlowerSegment(x_pos, y_pos)
-            self.segments.append(seg)
-
-        # Initialize the data for each segment
-        segment.initialize_traffic(self.segments, params.ISDVA, params.ISDVSD)
 
     def init_cells(self):
 
@@ -162,7 +137,8 @@ class FlowerSim(object):
                     continue
 
                 pot_cell_union = len(segment_cover.union(cell.segments))
-                pot_candidate_union = len(segment_cover.union(candidate.segments))
+                pot_candidate_union = len(
+                    segment_cover.union(candidate.segments))
 
                 if pot_candidate_union < pot_cell_union:
                     candidate = cell
@@ -201,7 +177,7 @@ class FlowerSim(object):
 
         virtual_clusters = list()
         for cell in self.cells:
-            c = cluster.FlowerVirtualCluster()
+            c = flower.cluster.FlowerVirtualCluster()
             c.central_cluster = self.virtual_hub
             c.add(cell)
             c.calculate_tour()
@@ -211,7 +187,8 @@ class FlowerSim(object):
         # clusters
         while len(virtual_clusters) >= params.MDC_COUNT:
             logging.info("Current VCs: %r", virtual_clusters)
-            virtual_clusters = cluster.combine_clusters(virtual_clusters, self.virtual_hub)
+            virtual_clusters = cluster.combine_clusters(virtual_clusters,
+                                                        self.virtual_hub)
 
         # Sort the VCs in polar order and assign an id
         sorted_vcs = point.sort_polar(virtual_clusters)
@@ -231,15 +208,17 @@ class FlowerSim(object):
     def compute_total_energy(self, clusters):
         for c in clusters:
             self.mechanical_energy += c.motion_energy()
-            self.communication_energy += c.communication_energy(clusters, self.cells)
+            self.communication_energy += c.communication_energy(clusters,
+                                                                self.cells)
 
         logging.info("Total motion energy: %f", self.mechanical_energy)
-        logging.info("Total communication energy: %f", self.communication_energy)
+        logging.info("Total communication energy: %f",
+                     self.communication_energy)
 
     def handle_large_em(self):
 
         for vc in self.virtual_clusters:
-            c = cluster.FlowerCluster()
+            c = flower.cluster.FlowerCluster()
             c.cluster_id = vc.virtual_cluster_id
             c.central_cluster = self.hub
 
@@ -270,17 +249,22 @@ class FlowerSim(object):
             if r > 100:
                 raise FlowerError("Optimization got lost")
 
-            stdev = statistics.pstdev([self.total_cluster_energy(c) for c in all_clusters])
-            c_most = max(all_clusters, key=lambda x: self.total_cluster_energy(x))
+            stdev = statistics.pstdev(
+                [self.total_cluster_energy(c) for c in all_clusters])
+            c_most = max(all_clusters,
+                         key=lambda x: self.total_cluster_energy(x))
 
             # get the neighbors of c_most
-            neighbors = [c for c in all_clusters if abs(c.cluster_id - c_most.cluster_id) == 1]
+            neighbors = [c for c in all_clusters if
+                         abs(c.cluster_id - c_most.cluster_id) == 1]
 
             # find the minimum energy neighbor
-            neighbor = min(neighbors, key=lambda x: self.total_cluster_energy(x))
+            neighbor = min(neighbors,
+                           key=lambda x: self.total_cluster_energy(x))
 
             # find the cell in c_most nearest the neighbor
-            c_out, _ = cluster.closest_nodes(c_most, neighbor, cell_distance=False)
+            c_out, _ = cluster.closest_nodes(c_most, neighbor,
+                                             cell_distance=False)
 
             c_most.remove(c_out)
             neighbor.add(c_out)
@@ -290,7 +274,8 @@ class FlowerSim(object):
             [c.calculate_tour() for c in all_clusters]
 
             # emulate a do ... while loop
-            stdev_new = statistics.pstdev([self.total_cluster_energy(c) for c in all_clusters])
+            stdev_new = statistics.pstdev(
+                [self.total_cluster_energy(c) for c in all_clusters])
             r += 1
             logging.info("Completed %d rounds of Ec >> Em", r)
 
@@ -309,7 +294,7 @@ class FlowerSim(object):
         # First round (initial cell setup and energy calculation)
 
         for vc in self.virtual_clusters:
-            c = cluster.FlowerCluster()
+            c = flower.cluster.FlowerCluster()
             c.cluster_id = vc.virtual_cluster_id
             c.central_cluster = self.hub
 
@@ -339,16 +324,19 @@ class FlowerSim(object):
             # total cost.
             candidates = self.clusters + [self.hub]
             candidates = [c for c in candidates if not c.completed]
-            c_least = min(candidates, key=lambda x: self.total_cluster_energy(x))
+            c_least = min(candidates,
+                          key=lambda x: self.total_cluster_energy(x))
 
             # In general, only consider cells that have not already been added to a
             # cluster. There is an exception to this when expanding the hub cluster.
-            cells = [c for c in self.cells if c.cluster_id == params.NOT_CLUSTERED]
+            cells = [c for c in self.cells if
+                     c.cluster_id == params.NOT_CLUSTERED]
 
             # If there are no more cells to assign, then we mark this cluster as "completed"
             if not cells:
                 c_least.completed = True
-                logging.info("All cells assigned. Marking %s as completed", c_least)
+                logging.info("All cells assigned. Marking %s as completed",
+                             c_least)
                 continue
 
             if c_least == self.hub:
@@ -375,19 +363,23 @@ class FlowerSim(object):
 
                     # Just for proper bookkeeping, reset the virtual cell's ID to NOT_CLUSTERED
                     self.damaged.cluster_id = params.NOT_CLUSTERED
-                    logging.info("ROUND %d: Moved %s to %s", r, self.hub, best_cell)
+                    logging.info("ROUND %d: Moved %s to %s", r, self.hub,
+                                 best_cell)
 
                 else:
                     # Find the set of cells that are not already in the hub cluster
-                    available_cells = list(set(self.cells) - set(self.hub.cells))
+                    available_cells = list(
+                        set(self.cells) - set(self.hub.cells))
 
                     # Out of those cells, find the one that is closest to the damaged area
-                    best_cell, _ = cluster.closest_nodes(available_cells, [self.hub.recent])
+                    best_cell, _ = cluster.closest_nodes(available_cells,
+                                                         [self.hub.recent])
 
                     # Add that cell to the hub cluster
                     self.hub.add(best_cell)
 
-                    logging.info("ROUND %d: Added %s to %s", r, best_cell, self.hub)
+                    logging.info("ROUND %d: Added %s to %s", r, best_cell,
+                                 self.hub)
 
                 # Set the cluster ID for the new cell, mark it as the most recent cell for the hub
                 # cluster and update the anchors for all other clusters.
@@ -403,20 +395,24 @@ class FlowerSim(object):
                 best_cell = None
 
                 # Find the VC that corresponds to the current cluster
-                vci = next(i for i in self.virtual_clusters if i.virtual_cluster_id == c_least.cluster_id)
+                vci = next(i for i in self.virtual_clusters if
+                           i.virtual_cluster_id == c_least.cluster_id)
 
                 # Get a list of the cells that have not yet been added to a cluster
-                candidates = [c for c in vci.cells if c.cluster_id == params.NOT_CLUSTERED]
+                candidates = [c for c in vci.cells if
+                              c.cluster_id == params.NOT_CLUSTERED]
 
                 if candidates:
 
                     # Find the cell that is closest to the cluster's recent cell
-                    best_cell, _ = cluster.closest_nodes(candidates, [c_least.recent])
+                    best_cell, _ = cluster.closest_nodes(candidates,
+                                                         [c_least.recent])
 
                 else:
                     for i in range(1, max(self.grid.cols, self.grid.rows) + 1):
                         recent = c_least.recent
-                        nbrs = self.grid.cell_neighbors(recent.row, recent.col, radius=i)
+                        nbrs = self.grid.cell_neighbors(recent.row, recent.col,
+                                                        radius=i)
 
                         for nbr in nbrs:
                             # filter out cells that are not part of a virtual cluster
@@ -424,7 +420,8 @@ class FlowerSim(object):
                                 continue
 
                             # filter out cells that are not in neighboring VCs
-                            if abs(nbr.virtual_cluster_id - vci.virtual_cluster_id) != 1:
+                            if abs(
+                                            nbr.virtual_cluster_id - vci.virtual_cluster_id) != 1:
                                 continue
 
                             # if the cell we find is already clustered, we are done working
@@ -440,14 +437,17 @@ class FlowerSim(object):
                             break
 
                 if best_cell:
-                    logging.info("ROUND %d: Added %s to %s", r, best_cell, c_least)
+                    logging.info("ROUND %d: Added %s to %s", r, best_cell,
+                                 c_least)
                     c_least.add(best_cell)
                     c_least.recent = best_cell
                     best_cell.cluster_id = c_least.cluster_id
 
                 else:
                     c_least.completed = True
-                    logging.info("ROUND %d: No best cell found. Marking %s completed", r, c_least)
+                    logging.info(
+                        "ROUND %d: No best cell found. Marking %s completed",
+                        r, c_least)
 
                 [c.calculate_tour() for c in self.clusters + [self.hub]]
 
@@ -463,9 +463,12 @@ class FlowerSim(object):
         r = 0
         while True:
 
-            stdev = statistics.pstdev([self.total_cluster_energy(c) for c in all_clusters])
-            c_least = min(all_clusters, key=lambda x: self.total_cluster_energy(x))
-            c_most = max(all_clusters, key=lambda x: self.total_cluster_energy(x))
+            stdev = statistics.pstdev(
+                [self.total_cluster_energy(c) for c in all_clusters])
+            c_least = min(all_clusters,
+                          key=lambda x: self.total_cluster_energy(x))
+            c_most = max(all_clusters,
+                         key=lambda x: self.total_cluster_energy(x))
 
             if r > 100:
                 raise FlowerError("Optimization got lost")
@@ -481,7 +484,8 @@ class FlowerSim(object):
                 [c.calculate_tour() for c in all_clusters]
 
                 # emulate a do ... while loop
-                stdev_new = statistics.pstdev([self.total_cluster_energy(c) for c in all_clusters])
+                stdev_new = statistics.pstdev(
+                    [self.total_cluster_energy(c) for c in all_clusters])
                 r += 1
                 logging.info("Completed %d rounds of 2b", r)
 
@@ -508,7 +512,8 @@ class FlowerSim(object):
                 [c.calculate_tour() for c in all_clusters]
 
                 # emulate a do ... while loop
-                stdev_new = statistics.pstdev([self.total_cluster_energy(c) for c in all_clusters])
+                stdev_new = statistics.pstdev(
+                    [self.total_cluster_energy(c) for c in all_clusters])
                 r += 1
                 logging.info("Completed %d rounds of 2b", r)
 
@@ -539,7 +544,8 @@ class FlowerSim(object):
                 [c.calculate_tour() for c in all_clusters]
 
                 # emulate a do ... while loop
-                stdev_new = statistics.pstdev([self.total_cluster_energy(c) for c in all_clusters])
+                stdev_new = statistics.pstdev(
+                    [self.total_cluster_energy(c) for c in all_clusters])
                 r += 1
                 logging.info("Completed %d rounds of 2b", r)
 
@@ -570,11 +576,13 @@ class FlowerSim(object):
         # Check for special cases (Em >> Ec or Ec >> Em)
         self.compute_total_energy(self.virtual_clusters + [self.virtual_hub])
 
-        if much_greater_than(self.mechanical_energy, self.communication_energy):
+        if much_greater_than(self.mechanical_energy,
+                             self.communication_energy):
             logging.info("Handling special case Em >> Ec")
             self.em_is_large = True
             self.handle_large_em()
-        elif much_greater_than(self.communication_energy, self.mechanical_energy):
+        elif much_greater_than(self.communication_energy,
+                               self.mechanical_energy):
             logging.info("Handling special case Ec >> Em")
             self.ec_is_large = True
             self.handle_large_ec()
@@ -584,10 +592,12 @@ class FlowerSim(object):
 
             # Check for special cases (Em >> Ec or Ec >> Em)
             self.compute_total_energy(self.clusters + [self.hub])
-            if much_greater_than(self.mechanical_energy, self.communication_energy):
+            if much_greater_than(self.mechanical_energy,
+                                 self.communication_energy):
                 logging.info("Need to conduct tour sharing (Em >> Ec)")
                 self.em_is_large = True
-            elif much_greater_than(self.communication_energy, self.mechanical_energy):
+            elif much_greater_than(self.communication_energy,
+                                   self.mechanical_energy):
                 logging.info("Need to conduct tour sharing (Ec >> Em)")
                 self.ec_is_large = True
 
@@ -618,7 +628,7 @@ def scatter(points, radius):
 
 
 def main():
-    sim = FlowerSim()
+    sim = FlowerBuilder()
     sim.run()
 
 

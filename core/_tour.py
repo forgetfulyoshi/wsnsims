@@ -4,7 +4,7 @@ import statistics
 
 import matplotlib.pyplot as plt
 
-from flower import point
+from core import point
 
 
 class TourError(Exception):
@@ -16,7 +16,7 @@ def tour_length(cells):
     tour_len = 0
     last = points[0]
     for p in points[1:]:
-        tour_len += (last - p).length()
+        tour_len += (last - p).norm()
         last = p
 
     return tour_len
@@ -62,7 +62,7 @@ def perpendicular_to_line(start, end, p):
     Following method from http://stackoverflow.com/a/5227626
     """
     v = end - start
-    d = v.normalized()
+    d = v.to_unit()
     a = start
     x = a + d.set_length((p - a) * d)
 
@@ -123,7 +123,7 @@ def gt_two_body_tour(cells, radius):
                 node_1 = node_2
                 continue
 
-            if closest.length() > perp.length():
+            if closest.length() > perp.norm():
                 parent_index = tour.index(node_1)
                 closest = perp
 

@@ -1,19 +1,17 @@
 import csv
-import itertools
-import logging
-import math
-import statistics
-import multiprocessing
-import time
 import datetime
-from collections import namedtuple
+import logging
+import multiprocessing
 import os
+import statistics
+import time
+from collections import namedtuple
 
-from flower import params
-from flower.flower_sim import FlowerSim
-from flower.results import Results
-from flower.tocs_sim import ToCS
-from flower import sim_inputs
+from conductor import sim_inputs
+from core import params
+from core.results import Results
+from flower.builder import FlowerBuilder
+from tocs.tocs_sim import ToCS
 
 logging.basicConfig(level=logging.ERROR)
 
@@ -43,7 +41,7 @@ def run_tocs(parameters):
     return results
 
 def run_flower(parameters):
-    flower_sim = FlowerSim()
+    flower_sim = FlowerBuilder()
     print("Starting FLOWER at {}".format(datetime.datetime.now().isoformat()))
     print("Using {}".format(parameters))
     start = time.time()

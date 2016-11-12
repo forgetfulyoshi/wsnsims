@@ -4,9 +4,8 @@ import math
 import statistics
 from collections import defaultdict
 
-from flower import data
-from flower import point
-from flower.results import Results
+from core import data, point
+from core.results import Results
 
 # logging.basicConfig(level=logging.DEBUG)
 
@@ -370,10 +369,12 @@ def compute_timestamps(sim, rounds=1):
                     download_size = sum(download)
 
                     if seg in sim.centroid.segments:
-                        outbound = sum(data.data(src, dst) for src in clust.segments for dst in sim.segments if
-                                       dst not in clust.segments)
-                        inbound = sum(data.data(src, dst) for src in sim.segments for dst in clust.segments if
-                                      src not in clust.segments)
+                        outbound = sum(
+                            data.data(src, dst) for src in clust.segments for dst in sim.segments if
+                            dst not in clust.segments)
+                        inbound = sum(
+                            data.data(src, dst) for src in sim.segments for dst in clust.segments if
+                            src not in clust.segments)
 
                         upload_size += outbound
                         download_size += inbound
@@ -413,12 +414,14 @@ def compute_timestamps(sim, rounds=1):
                 for dl_cluster in dl_clusters:
                     segs = dl_cluster.segments
                     others = [s for s in sim.segments if s not in segs]
-                    download_size += sum(data.data(src, dst) for src in segs for dst in others)
+                    download_size += sum(
+                        data.data(src, dst) for src in segs for dst in others)
 
                 for ul_cluster in ul_clusters:
                     segs = ul_cluster.segments
                     others = [s for s in sim.segments if s not in segs]
-                    upload_size += sum(data.data(src, dst) for src in others for dst in segs)
+                    upload_size += sum(
+                        data.data(src, dst) for src in others for dst in segs)
 
                 total_size = download_size + upload_size
                 comms_time = total_size / sim.transmission_rate

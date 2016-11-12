@@ -1,8 +1,13 @@
+import logging
+
 import numpy as np
 import scipy.spatial as sp
 
+import quantities as pq
+
 from core import linalg
 
+np.seterr(all='raise')
 
 class Tour(object):
     def __init__(self):
@@ -23,6 +28,38 @@ class Tour(object):
         #: for points[3] is collection_points[3].
         self.collection_points = None
 
+        #: The list of hull vertices. This is useful for checking if a point is
+        #: "inside" a tour.
+        self.hull = None
+
+        #: Internal memo of the length of this tour
+        self._length = np.inf
+
+    @property
+    def length(self):
+        if not np.isinf(self._length):
+            return self._length
+
+        if len(self.vertices) < 2:
+            self._length = 0. * pq.meter
+            return self._length
+
+        total = 0. * pq.meter
+        tail = 0
+        head = 1
+        while head < len(self.vertices):
+
+            start = self.collection_points[self.vertices[tail]]
+            stop = self.collection_points[self.vertices[head]]
+
+            total += np.linalg.norm(stop - start) * pq.meter
+
+            tail += 1
+            head += 1
+
+        self._length = total
+        return self._length
+
 
 def compute_tour(points, radio_range=0.):
     """
@@ -34,26 +71,44 @@ def compute_tour(points, radio_range=0.):
     :param points: The set of 2D points over which to find a path.
     :type points: np.array laid out as [[3,4], [9,2], ...]
 
+    :param radio_range:
+    :type radio_range: float
+
     :return: A Tour object containing the original points and a list of indexes
     into those points describing the path between them.
     """
-    hull = sp.ConvexHull(points)
-    tour = hull.vertices.tolist()
-    tour.append(tour[0])
 
-    collection_points = np.zeros(points.shape, dtype=points.dtype)
-    center_of_mass = linalg.centroid(points[hull.vertices])
-    for vertex in hull.vertices:
+    if len(points) < 2:
+        t = Tour()
+        t.points = points
+        t.vertices = np.array(range(len(points)))
+        t.collection_points = points
+        return t
+
+    if len(points) == 2:
+        vertices = np.array([0, 1])
+    else:
+        hull = sp.ConvexHull(points)
+        vertices = hull.vertices
+
+    route = Tour()
+    route.hull = np.copy(vertices)
+
+    tour = list(vertices)
+
+    collection_points = np.empty_like(points)
+    center_of_mass = linalg.centroid(points[vertices])
+    for vertex in vertices:
         cp = center_of_mass - points[vertex]
         cp /= np.linalg.norm(cp)
-        cp *= radio_range
+        cp *= radio_range.magnitude
         cp += points[vertex]
         collection_points[vertex] = cp
 
     # Determine the set of interior points by starting with the original set of
     # vertices and removing the hull points.
     interior = np.arange(start=0, stop=len(points), step=1)
-    interior = np.delete(interior, hull.vertices, 0)
+    interior = np.delete(interior, vertices, 0)
 
     for point_idx in interior:
 
@@ -63,8 +118,8 @@ def compute_tour(points, radio_range=0.):
 
         p = points[point_idx]
 
-        tail = 0
-        head = 1
+        tail = len(tour) - 1
+        head = 0
         while head < len(tour):
 
             start_idx = tour[tail]
@@ -72,14 +127,7 @@ def compute_tour(points, radio_range=0.):
             start = collection_points[start_idx]
             end = collection_points[end_idx]
 
-            perp = linalg.perpendicular(start, end, p)
-            if np.all(perp == np.array([np.inf, np.inf])):
-                tail = head
-                head += 1
-                continue
-
-            perp_vec = perp - p
-            perp_len = np.linalg.norm(perp_vec)
+            perp_len, perp_vec = linalg.closest_point(start, end, p)
 
             if perp_len < closest_distance:
                 closest_segment = head
@@ -90,12 +138,19 @@ def compute_tour(points, radio_range=0.):
             head += 1
 
         tour.insert(closest_segment, point_idx)
-        collect_point = closest_perp / np.linalg.norm(closest_perp)
-        collect_point *= radio_range
-        collect_point += points[point_idx]
+
+        collect_point = closest_perp - p
+        radius = np.linalg.norm(collect_point)
+
+        if radius > radio_range.magnitude:
+            collect_point /= radius
+            collect_point *= radio_range.magnitude
+
+        collect_point += p
         collection_points[point_idx] = collect_point
 
-    route = Tour()
+    tour.append(tour[0])
+
     route.points = points
     route.vertices = np.array(tour)
     route.collection_points = collection_points

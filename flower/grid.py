@@ -4,8 +4,8 @@ import itertools
 import logging
 import math
 
-from flower import point, params
-from flower.point import WorldPositionMixin
+from core import point, params
+from flower import params
 
 
 class GridPositionMixin(object):
@@ -80,7 +80,8 @@ class Grid(object):
         #
         # Initialize the grid with empty cells
         #
-        self._grid = [[Cell() for _ in range(self.cols)] for _ in range(self.rows)]
+        self._grid = [[Cell() for _ in range(self.cols)] for _ in
+                      range(self.rows)]
 
         #
         # Now go back over the grid and do basic cell initialization
@@ -128,8 +129,9 @@ class Grid(object):
         #
         # First, generate the set of possible coordinates
         #        
-        possible_coords = itertools.product(list(range(row - radius, row + radius + 1)),
-                                            list(range(col - radius, col + radius + 1)))
+        possible_coords = itertools.product(
+            list(range(row - radius, row + radius + 1)),
+            list(range(col - radius, col + radius + 1)))
 
         #
         # Now, filter out all coordinates not on the grid
@@ -153,22 +155,22 @@ class Grid(object):
         return self.cell(self.rows // 2, self.cols // 2)
 
 
-class Cell(WorldPositionMixin, GridPositionMixin):
+class Cell(object):
     """ Defines a cell in the grid """
 
     side_len = params.COMMUNICATION_RANGE / math.sqrt(2)
     count = 1
 
-    def __init__(self, x=0.0, y=0.0):
-        WorldPositionMixin.__init__(self, x, y)
-        GridPositionMixin.__init__(self)
+    def __init__(self, nd):
+        self.location = point.Vec2(nd)
+        self.collection_point = point.Vec2(nd)
+
+        self.segments = list()
 
         self.neighbors = list()
         self.access = 0
         self.signal_hop_count = 0
         self.proximity = 0
-        self.segments = list()
-        self.collection_point = None
 
         self.virtual_cluster_id = params.NOT_CLUSTERED
         self.cluster_id = params.NOT_CLUSTERED
