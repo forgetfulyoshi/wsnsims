@@ -4,54 +4,213 @@ import math
 import statistics
 from collections import defaultdict
 
-from core import data, point
+import numpy as np
+import quantities as pq
+import scipy.sparse.csgraph as sp
+
+from core import data, environment
 from core.results import Results
 
 # logging.basicConfig(level=logging.DEBUG)
 
-Timestamp = collections.namedtuple('Timestamp', ['segment', 'arrive', 'leave', 'upload', 'download', 'distance'])
+Timestamp = collections.namedtuple('Timestamp',
+                                   ['segment', 'arrive', 'leave', 'upload',
+                                    'download', 'distance'])
 
 
 class ToCSRunnerError(Exception):
     pass
 
 
-def trip(src, dst, sim):
-    distance = 0
+class ToCSRunner(object):
+    def __init__(self, sim):
+        """
 
-    if src in dst.cluster.tour_nodes():
-        tour = list(dst.cluster.tour_nodes())
-        tour = point.rotate_to_start(tour, src)
-        current = src
-        for p in tour[1:]:
-            distance += current.distance(p)
-            current = p
-            if p == dst:
-                break
+        :param sim: The simulation after a run of ToCS
+        :type sim: tocs.tocs_sim.ToCS
+        """
 
-    elif dst in src.cluster.tour_nodes():
-        tour = list(src.cluster.tour_nodes())
-        tour = point.rotate_to_start(tour, src)
-        current = src
-        for p in tour[1:]:
-            distance += current.distance(p)
-            current = p
-            if p == dst:
-                break
+        #: The simulation data
+        self.sim = sim
 
-    elif src.cluster == sim.centroid:
-        distance = trip(src, dst.cluster.rendezvous_point, sim) + trip(dst.cluster.rendezvous_point, dst, sim)
+        self.env = environment.Environment()
 
-    elif dst.cluster == sim.centroid:
-        distance = trip(src, src.cluster.rendezvous_point, sim) + trip(src.cluster.rendezvous_point, dst, sim)
+        self._segment_indexes = {}
 
-    else:
-        distance = (trip(src, src.cluster.rendezvous_point, sim) +
-                    trip(src.cluster.rendezvous_point, dst.cluster.rendezvous_point, sim) +
-                    trip(dst.cluster.rendezvous_point, dst, sim))
+        #: Cached version of the adjacency matrix. Weights are path lengths.
+        self._adj_mat = self._compute_adjacency_matrix()
 
-    logging.debug("Distance from %r to %r is %f", src, dst, distance)
-    return distance
+        self._distance_mat = self._compute_paths()
+
+    def _compute_adjacency_matrix(self):
+        """
+        Build out the adjacency matrix based on the paths created by the
+        builder. This takes the cluster paths and builds out a matrix suitable
+        for use in Dijkstra's algorithm.
+
+        This routine just sets the value of the self.sim attribute.
+
+        :return: None
+        """
+
+        # for clust in self.sim.clusters + [self.sim.centroid]:
+        #     route = clust.tour
+        #     assert not np.any(np.isinf(route.collection_points))
+
+        # for i, seg in enumerate(self.sim.segments + self.sim.centroid.segments):
+        #     self._segment_indexes[seg] = i
+
+        i = 0
+        for clust in self.sim.clusters + [self.sim.centroid]:
+            for seg_vertex in clust.tour.vertices:
+                seg = clust.tour.objects[seg_vertex]
+                if seg not in self._segment_indexes:
+                    self._segment_indexes[seg] = i
+                    i += 1
+
+        # First we need to get the total number of segments and relay nodes so
+        # we can create an N x N matrix. This is simply the number of segments
+        # plus the number of rendezvous points. As ToCS guarantees a single
+        # rendezvous point per cluster, we can just use the number of clusters.
+
+        node_count = len(self.sim.segments) + len(self.sim.clusters)
+        g_sparse = np.zeros((node_count, node_count), dtype=float)
+        g_sparse[:] = np.inf
+
+        for clust in self.sim.clusters + [self.sim.centroid]:
+            cluster_tour = clust.tour
+            i = len(cluster_tour.vertices) - 1
+            j = 0
+            while j < len(cluster_tour.vertices):
+                start_vertex = cluster_tour.vertices[i]
+                stop_vertex = cluster_tour.vertices[j]
+
+                start_pt = cluster_tour.collection_points[start_vertex]
+                stop_pt = cluster_tour.collection_points[stop_vertex]
+                distance = np.linalg.norm(stop_pt - start_pt)
+
+                start_seg = cluster_tour.objects[start_vertex]
+                stop_seg = cluster_tour.objects[stop_vertex]
+
+                start_index = self._segment_indexes[start_seg]
+                stop_index = self._segment_indexes[stop_seg]
+
+                g_sparse[start_index, stop_index] = distance
+
+                i = j
+                j += 1
+
+        g_sparse = sp.csgraph_from_dense(g_sparse, null_value=np.inf)
+        return g_sparse
+
+    def _compute_paths(self):
+        """
+        Run Dijkstra's algorithm over the adjacency matrix for the paths
+        produced by the simulation.
+
+        :return: The distance matrix based on adjacency matrix self._adj_mat
+        :rtype: np.array
+        """
+
+        distance_mat = sp.dijkstra(self._adj_mat, directed=True)
+        # assert not np.any(np.isinf(distance_mat))
+        if np.any(np.isinf(distance_mat)):
+            print("Found inf distance!!")
+
+        return distance_mat
+
+    def shortest_distance(self, begin, end):
+        """
+        Get the shortest distance between any two segments.
+
+        :param begin:
+        :type begin: core.segment.Segment
+        :param end:
+        :type end: core.segment.Segment
+        :return: float
+        """
+
+        begin_index = self._segment_indexes[begin]
+        end_index = self._segment_indexes[end]
+
+        distance = self._distance_mat[begin_index, end_index]
+        distance *= pq.meter
+        return distance
+
+    def print_all_distances(self):
+        """
+        For debugging, iterate over all segments and print the tour distances
+        between them.
+
+        :return: None
+        """
+        seg_pairs = [(begin, end) for begin in self.sim.segments
+                     for end in self.sim.segments if begin != end]
+
+        for begin, end in seg_pairs:
+            msg = "{} to {} is {}".format(begin, end,
+                                          self.shortest_distance(begin, end))
+            print(msg)
+
+        self.sim.show_state()
+
+    def average_communication_delay(self):
+        """
+        Compute the average communication delay across all segments.
+
+        :return: The delay time in seconds
+        :rtype: pq.quantity.Quantity
+        """
+
+        segment_pairs = ((src, dst) for src in self.sim.segments for dst in
+                         self.sim.segments if src != dst)
+
+        delays = []
+        for src, dst in segment_pairs:
+            delay = self.communication_delay(src, dst)
+            delays.append(delay)
+
+        delays = np.array(delays)
+        average_delay = np.mean(delays)
+        average_delay *= pq.second
+
+        return average_delay
+
+    def communication_delay(self, begin, end):
+        """
+        Compute the communication delay between any two segments. This is done
+        as per Equation 1 in FLOWER.
+
+        :param begin:
+        :type begin: core.segment.Segment
+        :param end:
+        :type end: core.segment.Segment
+
+        :return: The total communication delay in seconds
+        :rtype: pq.second
+        """
+
+        travel_delay = self.shortest_distance(begin, end) / self.env.mdc_speed
+
+        if begin.cluster_id == end.cluster_id:
+            transmission_count = 1
+        elif (begin.cluster_id == self.sim.centroid.cluster_id) or (
+                    end.cluster_id == self.sim.centroid.cluster_id):
+            transmission_count = 2
+        else:
+            transmission_count = 3
+
+        transmission_delay = transmission_count
+        transmission_delay *= data.data(begin, end)
+        transmission_delay /= self.env.comms_rate
+
+        relay_delay = self.holding_time(begin, end)
+
+        total_delay = travel_delay + transmission_delay + relay_delay
+        return total_delay
+
+    def holding_time(self, begin, end):
+        return 0. * pq.second
 
 
 def comm_delay(src, dst, sim):
@@ -82,7 +241,8 @@ def tour_time(clust, sim):
     cluster_tour = clust.tour_nodes()
     if len(cluster_tour) > 1:
 
-        t_time = clust.communication_energy(sim.clusters + [sim.centroid], sim.segments)
+        t_time = clust.communication_energy(sim.clusters + [sim.centroid],
+                                            sim.segments)
         t_time /= sim.comms_cost
         t_time /= sim.transmission_rate
         t_time += clust.tour_length / sim.mdc_speed
@@ -130,8 +290,10 @@ def holding_time(src_segment, dst_segment, sim):
         src_times = timestamps[src_cluster]
         dst_times = timestamps[dst_cluster]
 
-        src_mdc_ts = next(ts for ts in src_times if ts.segment == src_rendezvous)
-        dst_mdc_ts = next(ts for ts in dst_times if ts.segment == dst_rendezvous)
+        src_mdc_ts = next(
+            ts for ts in src_times if ts.segment == src_rendezvous)
+        dst_mdc_ts = next(
+            ts for ts in dst_times if ts.segment == dst_rendezvous)
 
         if dst_mdc_ts.leave < src_mdc_ts.arrive:
             dst_mdc_total = max(dst_times, key=lambda x: x.leave).leave
@@ -144,20 +306,27 @@ def holding_time(src_segment, dst_segment, sim):
         dst_times = timestamps[dst_cluster]
         centroid_times = timestamps[sim.centroid]
 
-        src_mdc_ts = next(ts for ts in src_times if ts.segment == src_rendezvous)
-        dst_mdc_ts = next(ts for ts in dst_times if ts.segment == dst_rendezvous)
-        centroid_src_mdc_ts = next(ts for ts in centroid_times if ts.segment == src_rendezvous)
-        centroid_dst_mdc_ts = next(ts for ts in centroid_times if ts.segment == dst_rendezvous)
+        src_mdc_ts = next(
+            ts for ts in src_times if ts.segment == src_rendezvous)
+        dst_mdc_ts = next(
+            ts for ts in dst_times if ts.segment == dst_rendezvous)
+        centroid_src_mdc_ts = next(
+            ts for ts in centroid_times if ts.segment == src_rendezvous)
+        centroid_dst_mdc_ts = next(
+            ts for ts in centroid_times if ts.segment == dst_rendezvous)
 
         if dst_mdc_ts.leave < centroid_dst_mdc_ts.arrive:
             dst_mdc_total = max(dst_times, key=lambda x: x.leave).leave
-            hold_2 = (dst_mdc_total + dst_mdc_ts.arrive) - centroid_dst_mdc_ts.arrive
+            hold_2 = (
+                         dst_mdc_total + dst_mdc_ts.arrive) - centroid_dst_mdc_ts.arrive
         else:
             hold_2 = dst_mdc_ts.arrive - src_mdc_ts.arrive
 
         if centroid_src_mdc_ts.leave < src_mdc_ts.arrive:
-            centroid_src_total = max(centroid_times, key=lambda x: x.leave).leave
-            hold_1 = (centroid_src_total + centroid_src_mdc_ts.arrive) - src_mdc_ts.arrive
+            centroid_src_total = max(centroid_times,
+                                     key=lambda x: x.leave).leave
+            hold_1 = (
+                         centroid_src_total + centroid_src_mdc_ts.arrive) - src_mdc_ts.arrive
         else:
             hold_1 = dst_mdc_ts.arrive - src_mdc_ts.arrive
 
@@ -168,7 +337,8 @@ def holding_time(src_segment, dst_segment, sim):
 
 def max_intersegment_comm_delay(simulation_data):
     segments = simulation_data.segments
-    segment_pairs = [(s1, s2) for s1 in segments for s2 in segments if s1 != s2]
+    segment_pairs = [(s1, s2) for s1 in segments for s2 in segments if
+                     s1 != s2]
 
     delays = [comm_delay(s, d, simulation_data) for s, d in segment_pairs]
     average_delay = statistics.mean(delays)
@@ -207,7 +377,8 @@ def network_lifetime(sim):
                 for entry in clust_tour:
                     updated_arrive = entry.arrive + circuit_time
                     updated_leave = entry.leave + circuit_time
-                    clust_tour[clust_tour.index(entry)] = entry._replace(arrive=updated_arrive, leave=updated_leave)
+                    clust_tour[clust_tour.index(entry)] = entry._replace(
+                        arrive=updated_arrive, leave=updated_leave)
 
             idx = (idx + 1) % len(clust_tour)
 
@@ -249,7 +420,8 @@ def average_total_mdc_energy_consumption(sim):
     all_clusters = sim.clusters + [sim.centroid]
     total_energy = 0
     for clust in all_clusters:
-        total_energy += clust.total_energy(all_clusters=all_clusters, all_nodes=sim.segments)
+        total_energy += clust.total_energy(all_clusters=all_clusters,
+                                           all_nodes=sim.segments)
 
     average_energy = total_energy / len(all_clusters)
     return average_energy
@@ -333,12 +505,15 @@ def buffer_space_required(sim):
             max_mdc_time = mdc_times[-1:][0].arrive
             rounds += 1
 
-        mdc_centroid_visits = [ts.segment for ts in mdc_times if ts.segment == clust.rendezvous_point]
+        mdc_centroid_visits = [ts.segment for ts in mdc_times if
+                               ts.segment == clust.rendezvous_point]
         arrivals = max(1, len(mdc_centroid_visits))
 
         segs = clust.segments
-        intercluster_outbound = [data.data(src, dst) for src in segs for dst in sim.segments if dst not in segs]
-        intercluster_inbound = [data.data(src, dst) for src in sim.segments if src not in segs for dst in segs]
+        intercluster_outbound = [data.data(src, dst) for src in segs for dst in
+                                 sim.segments if dst not in segs]
+        intercluster_inbound = [data.data(src, dst) for src in sim.segments if
+                                src not in segs for dst in segs]
 
         total_data = sum(intercluster_outbound) * arrivals
         total_data += sum(intercluster_inbound)
@@ -362,18 +537,22 @@ def compute_timestamps(sim, rounds=1):
             for idx, seg in enumerate(tour):
                 if (timestamp > 0) or (len(tour) == 1):
                     # compute upload / download time
-                    upload = [data.data(seg, dst) for dst in sim.segments if dst != seg]
-                    download = [data.data(src, seg) for src in sim.segments if src != seg]
+                    upload = [data.data(seg, dst) for dst in sim.segments if
+                              dst != seg]
+                    download = [data.data(src, seg) for src in sim.segments if
+                                src != seg]
 
                     upload_size = sum(upload)
                     download_size = sum(download)
 
                     if seg in sim.centroid.segments:
                         outbound = sum(
-                            data.data(src, dst) for src in clust.segments for dst in sim.segments if
+                            data.data(src, dst) for src in clust.segments for
+                            dst in sim.segments if
                             dst not in clust.segments)
                         inbound = sum(
-                            data.data(src, dst) for src in sim.segments for dst in clust.segments if
+                            data.data(src, dst) for src in sim.segments for dst
+                            in clust.segments if
                             src not in clust.segments)
 
                         upload_size += outbound
@@ -394,7 +573,8 @@ def compute_timestamps(sim, rounds=1):
                 travel_time = distance / sim.mdc_speed
 
                 # (next_segment, arrive_time, leave_time, upload, download)
-                ts = Timestamp(seg, timestamp, timestamp + comms_time, upload_size, download_size, distance)
+                ts = Timestamp(seg, timestamp, timestamp + comms_time,
+                               upload_size, download_size, distance)
                 timestamps[clust].append(ts)
                 timestamp += comms_time + travel_time
 
@@ -408,7 +588,8 @@ def compute_timestamps(sim, rounds=1):
         if seg in sim.centroid.rendezvous_points.values():
 
             if (timestamp > 0) or (len(tour) == 1):
-                dl_clusters = [c for c in sim.clusters if c.rendezvous_point == seg]
+                dl_clusters = [c for c in sim.clusters if
+                               c.rendezvous_point == seg]
                 ul_clusters = [c for c in sim.clusters if c not in dl_clusters]
 
                 for dl_cluster in dl_clusters:
@@ -432,8 +613,10 @@ def compute_timestamps(sim, rounds=1):
                 comms_time = 0
 
         else:
-            upload = [data.data(seg, dst) for dst in sim.segments if dst != seg]
-            download = [data.data(src, seg) for src in sim.segments if src != seg]
+            upload = [data.data(seg, dst) for dst in sim.segments if
+                      dst != seg]
+            download = [data.data(src, seg) for src in sim.segments if
+                        src != seg]
 
             upload_size += sum(upload)
             download_size += sum(download)
@@ -445,7 +628,8 @@ def compute_timestamps(sim, rounds=1):
         travel_time = distance / sim.mdc_speed
 
         # (next_segment, arrive_time, leave_time, upload, download, distance)
-        ts = Timestamp(seg, timestamp, timestamp + comms_time, upload_size, download_size, distance)
+        ts = Timestamp(seg, timestamp, timestamp + comms_time, upload_size,
+                       download_size, distance)
         timestamps[sim.centroid].append(ts)
         timestamp += comms_time + travel_time
 

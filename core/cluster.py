@@ -46,7 +46,7 @@ class BaseCluster(object):
         #: points).
         self._radio_range = self.env.comms_range
 
-    def _invalidate_cache(self):
+    def _invalidate_cache(self) -> None:
         self._location = None
         self._tour = None
 
@@ -56,6 +56,7 @@ class BaseCluster(object):
 
     @relay_node.setter
     def relay_node(self, value):
+        logging.debug("Setting %s RN to %s", self, value)
         self._relay_node = value
         self._invalidate_cache()
 
@@ -76,7 +77,7 @@ class BaseCluster(object):
         return self._location
 
     @property
-    def tour(self):
+    def tour(self) -> tour.Tour:
         if self._tour:
             return self._tour
 
@@ -89,6 +90,11 @@ class BaseCluster(object):
         points = np.array(points) * pq.meter
         self._tour = tour.compute_tour(points,
                                        radio_range=self._radio_range)
+
+        self._tour.objects = list(self.nodes)
+        if self.relay_node:
+            self._tour.objects.append(self.relay_node)
+
         return self._tour
 
     @property
@@ -105,12 +111,8 @@ class BaseCluster(object):
 
     def add(self, node):
         if node not in self.nodes:
-            try:
-                node.location.nd.units
-            except AttributeError:
-                raise CoreClusterError()
-
             logging.debug("Adding %s to %s", node, self)
+            node.cluster_id = self.cluster_id
             self.nodes.append(node)
             self._invalidate_cache()
         else:
@@ -119,6 +121,7 @@ class BaseCluster(object):
     def remove(self, node):
         logging.debug("Removing %s from %s", node, self)
         self.nodes.remove(node)
+        node.cluster_id = -1
         self._invalidate_cache()
 
     def motion_energy(self):

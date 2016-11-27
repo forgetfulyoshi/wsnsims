@@ -67,6 +67,7 @@ class RelayNode(object):
     def __repr__(self):
         return "RN{}".format(self.location)
 
+
 class ToCSCentroid(ToCSCluster):
     def __init__(self):
         super(ToCSCentroid, self).__init__()

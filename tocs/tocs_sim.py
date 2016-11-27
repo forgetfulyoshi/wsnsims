@@ -1,5 +1,7 @@
 import logging
+import typing
 
+import time
 import matplotlib.pyplot as plt
 import numpy as np
 import quantities as pq
@@ -8,6 +10,7 @@ from matplotlib import path as mp
 from core import cluster, segment, linalg, environment
 from core.comparisons import much_greater_than
 from tocs.cluster import ToCSCluster, RelayNode, ToCSCentroid
+from tocs.tocs_runner import ToCSRunner
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -22,7 +25,8 @@ class ToCS(object):
         # Create the centroid cluster
         self.centroid = ToCSCentroid()
 
-        self.clusters = list()
+        self.clusters = list()  # type: typing.List[ToCSCluster]
+
         self._length_threshold = 0.5
 
     @property
@@ -33,32 +37,42 @@ class ToCS(object):
         return self.centroid.location.nd
 
     def show_state(self):
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+
         # Show the location of all segments
         segment_points = [seg.location.nd for seg in self.segments]
         segment_points = np.array(segment_points)
-        plt.plot(segment_points[:, 0], segment_points[:, 1], 'bo')
+        ax.plot(segment_points[:, 0], segment_points[:, 1], 'bo')
 
         # Show the outline of the clusters
         for clust in self.clusters:
             route = clust.tour
             points = route.points
-            plt.plot(points[route.vertices, 0], points[route.vertices, 1],
-                     'b--', lw=2)
+            ax.plot(points[route.vertices, 0], points[route.vertices, 1],
+                    'b--', lw=2)
 
         # Show the centroid points
         route = self.centroid.tour
         points = route.collection_points
-        plt.plot(points[:, 0], points[:, 1], 'ro')
-        plt.plot(points[route.vertices, 0], points[route.vertices, 1],
-                 'r--', lw=2)
+        ax.plot(points[:, 0], points[:, 1], 'ro')
+        ax.plot(points[route.vertices, 0], points[route.vertices, 1],
+                'r--', lw=2)
 
         # Show the path using the collection points
         for clust in self.clusters:
             route = clust.tour
             cps = route.collection_points
-            plt.plot(cps[:, 0], cps[:, 1], 'go')
-            plt.plot(cps[route.vertices, 0], cps[route.vertices, 1],
-                     'g--', lw=2)
+            ax.plot(cps[:, 0], cps[:, 1], 'go')
+            ax.plot(cps[route.vertices, 0], cps[route.vertices, 1],
+                    'g--', lw=2)
+
+        # Annotate the segments for easier debugging
+        for seg in self.segments:
+            xy = seg.location.nd
+            xy_text = xy + (1. * pq.meter)
+
+            ax.annotate(seg, xy=xy, xytext=xy_text)
 
         plt.show()
 
@@ -93,9 +107,18 @@ class ToCS(object):
         :rtype: bool
         """
         average_length = self.average_tour_length()
-        logging.debug("Average TL: %s", average_length)
-        for clust in self.clusters + [self.centroid]:
-            logging.debug("%s TL: %s", clust, clust.tour_length)
+        logging.debug("Average tour length: %s", average_length)
+        for clust in self.clusters:
+            logging.debug("%s tour length: %s", clust, clust.tour_length)
+
+            max_tour = clust.tour_length
+            max_tour += np.linalg.norm(
+                clust.rendezvous_point.location.nd - self.center) * pq.meter
+
+            if max_tour < average_length:
+                logging.info("Cannot optimize %s in this round", clust)
+                continue
+
             if much_greater_than(average_length, clust.tour_length,
                                  r=self._length_threshold):
                 return True
@@ -130,6 +153,9 @@ class ToCS(object):
             new_rp_loc *= 0.75
             new_rp_loc += self.center
 
+            if np.allclose(current_rp_loc.magnitude, new_rp_loc.magnitude):
+                break
+
             # Now assign the new location to the existing RP object (just saves
             # us object creation).
             self._update_rp_pos(clust, new_rp_loc)
@@ -162,6 +188,11 @@ class ToCS(object):
             new_rp_loc *= 1.25
             new_rp_loc += self.center
 
+            # Handle the case where a cluster's tour cannot be optimized any
+            # further.
+            if np.allclose(new_rp_loc.magnitude, current_rp_loc.magnitude):
+                break
+
             # Now assign the new location to the existing RP object (just saves
             # us object creation).
             self._update_rp_pos(clust, new_rp_loc)
@@ -181,9 +212,10 @@ class ToCS(object):
         """
 
         closest = None
-        min_distance = 0. * pq.meter
+        min_distance = np.inf * pq.meter
         for seg in clust.segments:
             distance = np.linalg.norm(seg.location.nd - self.center)
+            distance *= pq.meter
             if min_distance > distance:
                 min_distance = distance
                 closest = seg
@@ -273,8 +305,8 @@ class ToCS(object):
         self.centroid.add_segment(closest)
 
         # Remove the existing RP from the central cluster
-        rp = clust.rendezvous_point
-        self.centroid.remove(rp)
+        # rp = clust.rendezvous_point
+        # self.centroid.remove(rp)
 
         # Calculate the new RP
         self._calculate_rp(clust)
@@ -329,10 +361,16 @@ class ToCS(object):
         self.centroid.add(new_rp)
 
     def optimize_rendezvous_points(self):
+        # self.show_state()
+        round_count = 1
         while self._unbalanced():
+            logging.info("Running optimization round %d", round_count)
+            round_count += 1
+
             average_length = self.average_tour_length()
 
             for clust in self.clusters:
+                print("Examining %s", clust)
                 if much_greater_than(average_length, clust.tour_length,
                                      r=self._length_threshold):
                     # Handle the case where we need to move the cluster's RP
@@ -348,7 +386,7 @@ class ToCS(object):
                 else:
                     continue
 
-                self.show_state()
+                # self.show_state()
 
     def average_tour_length(self):
         """
@@ -373,12 +411,15 @@ class ToCS(object):
         # logging.info("Average tour length: %s", self.average_tour_length())
         # self.show_state()
         self.optimize_rendezvous_points()
-        self.show_state()
+        # self.show_state()
         return self
 
     def run(self):
         sim = self.compute_paths()
-        # return tocs_runner.run_sim(sim)
+        runner = ToCSRunner(sim)
+        # runner.print_all_distances()
+        print("Average comms delay: {}".format(
+            runner.average_communication_delay()))
 
 
 def plot(points, *args, **kwargs):
@@ -400,6 +441,12 @@ def scatter(points, radius):
 
 def main():
     env = environment.Environment()
+    env.grid_height = 20000. * pq.meter
+    env.grid_width = 20000. * pq.meter
+    seed = int(time.time())
+    # seed = 1480203906
+    logging.debug("Random seed is %s", seed)
+    np.random.seed(seed)
     locs = np.random.rand(env.segment_count, 2) * env.grid_height
     sim = ToCS(locs)
     sim.run()

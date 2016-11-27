@@ -1,13 +1,13 @@
-import logging
+from typing import List
 
 import numpy as np
-import scipy.spatial as sp
-
 import quantities as pq
+import scipy.spatial as sp
 
 from core import linalg
 
 np.seterr(all='raise')
+
 
 class Tour(object):
     def __init__(self):
@@ -16,11 +16,11 @@ class Tour(object):
         """
 
         #: The original set of points for which a tour was calculated
-        self.points = None
+        self.points = None  # type: List[np.ndarray] | None
 
         #: A list of indexes into points. Taken in order, these indexes
         #: describe the tour path to each point.
-        self.vertices = None
+        self.vertices = None  # type: List[int]
 
         #: The set of points which a traveller would use to simply enter the
         #: "radio range" of each of the given points. These points correspond
@@ -31,6 +31,11 @@ class Tour(object):
         #: The list of hull vertices. This is useful for checking if a point is
         #: "inside" a tour.
         self.hull = None
+
+        #: Additional objects that can be stored. This is typically used to
+        #: correlate the tour points to their original objects (e.g., segments
+        #: or cells).
+        self.objects = None
 
         #: Internal memo of the length of this tour
         self._length = np.inf
@@ -48,7 +53,6 @@ class Tour(object):
         tail = 0
         head = 1
         while head < len(self.vertices):
-
             start = self.collection_points[self.vertices[tail]]
             stop = self.collection_points[self.vertices[head]]
 
@@ -154,4 +158,12 @@ def compute_tour(points, radio_range=0.):
     route.points = points
     route.vertices = np.array(tour)
     route.collection_points = collection_points
+
+    # TODO: Remove these asserts
+    for i in range(len(points)):
+        assert i in tour
+    assert len(tour) == len(points) + 1
+    assert len(route.points) == len(route.collection_points)
+    assert np.all(route.collection_points)
+
     return route

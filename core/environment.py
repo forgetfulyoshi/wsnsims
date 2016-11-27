@@ -48,4 +48,5 @@ class _Environment(object):
         return jpb
 
 
+#: type: _Environment
 Environment = SingletonDecorator(_Environment)
