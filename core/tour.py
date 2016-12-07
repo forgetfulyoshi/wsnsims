@@ -12,7 +12,7 @@ np.seterr(all='raise')
 class Tour(object):
     def __init__(self):
         """
-        Contains all data for a tour over a given set of points.
+        Contains all volume for a tour over a given set of points.
         """
 
         #: The original set of points for which a tour was calculated
@@ -92,7 +92,7 @@ def compute_tour(points, radio_range=0.):
     if len(points) == 2:
         vertices = np.array([0, 1])
     else:
-        hull = sp.ConvexHull(points)
+        hull = sp.ConvexHull(points, qhull_options='QJ')
         vertices = hull.vertices
 
     route = Tour()

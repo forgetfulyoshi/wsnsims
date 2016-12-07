@@ -43,8 +43,9 @@ class _Environment(object):
     @property
     def comms_cost(self):
         """ The energy required to transmit 1 bit in J/Mb """
-        j = self.alpha + self.beta * np.power(self.comms_range, self.delta)
-        jpb = j / (pq.mebi * pq.bit)
+        # j = self.alpha + self.beta * np.power(self.comms_range, self.delta)
+        # jpb = j / (pq.mebi * pq.bit)
+        jpb = 2. * pq.J / (pq.mebi * pq.bit)
         return jpb
 
 

@@ -9,7 +9,8 @@ from matplotlib import path as mp
 
 from core import cluster, segment, linalg, environment
 from core.comparisons import much_greater_than
-from tocs.cluster import ToCSCluster, RelayNode, ToCSCentroid
+from tocs.cluster import ToCSCluster, ToCSCentroid
+from core.cluster import RelayNode
 from tocs.tocs_runner import ToCSRunner
 
 logging.basicConfig(level=logging.DEBUG)
@@ -386,7 +387,7 @@ class ToCS(object):
                 else:
                     continue
 
-                # self.show_state()
+                    # self.show_state()
 
     def average_tour_length(self):
         """
@@ -418,31 +419,17 @@ class ToCS(object):
         sim = self.compute_paths()
         runner = ToCSRunner(sim)
         # runner.print_all_distances()
-        print("Average comms delay: {}".format(
-            runner.average_communication_delay()))
-
-
-def plot(points, *args, **kwargs):
-    x = [p.x for p in points]
-    y = [p.y for p in points]
-    plt.plot(x, y, *args, **kwargs)
-
-
-def scatter(points, radius):
-    plot(points, 'ro')
-
-    axes = plt.axes()
-    for p in points:
-        circle = plt.Circle((p.x, p.y), radius=radius, alpha=0.5)
-        axes.add_patch(circle)
-
-    plt.axis('scaled')
+        print("Maximum comms delay: {}".format(
+            runner.maximum_communication_delay()))
+        print("Energy balance: {}".format(runner.energy_balance()))
+        print("Average energy: {}".format(runner.average_energy()))
+        print("Max buffer size: {}".format(runner.max_buffer_size()))
 
 
 def main():
     env = environment.Environment()
-    env.grid_height = 20000. * pq.meter
-    env.grid_width = 20000. * pq.meter
+    # env.grid_height = 20000. * pq.meter
+    # env.grid_width = 20000. * pq.meter
     seed = int(time.time())
     # seed = 1480203906
     logging.debug("Random seed is %s", seed)

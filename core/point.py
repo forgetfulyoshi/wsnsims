@@ -118,6 +118,9 @@ def sort_polar(points, field=None):
         # noinspection PyArgumentList
         sorted_points = sorted(points,
                                key=methodcaller('polar_angle', origin=lowest))
+
+
+
     else:
         lowest = min(points, key=attrgetter(field + '.y', field + '.x'))
         decorated = [(getattr(p, field).polar_angle(

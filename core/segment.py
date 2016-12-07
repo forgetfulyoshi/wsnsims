@@ -11,7 +11,7 @@ class Segment(object):
         Segment.count += 1
 
         self.location = point.Vec2(nd)
-        self.cluster_id = params.NOT_CLUSTERED
+        self.cluster_id = -1
 
     def __str__(self):
         return "Segment {}".format(self.segment_id)
@@ -23,10 +23,10 @@ class Segment(object):
 class FlowerSegment(Segment):
     def __init__(self, nd):
         super(FlowerSegment, self).__init__(nd)
-        self.cell = None
+        self.cell_id = -1
 
     def __str__(self):
-        return "Flower Segment {}".format(self.segment_id)
+        return "FLOWER Segment {}".format(self.segment_id)
 
     def __repr__(self):
         return "FSEG {}".format(self.segment_id)

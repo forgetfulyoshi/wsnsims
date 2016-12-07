@@ -10,7 +10,7 @@ from collections import namedtuple
 from conductor import sim_inputs
 from core import params
 from core.results import Results
-from flower.builder import FlowerBuilder
+from flower.flower_sim import Flower
 from tocs.tocs_sim import ToCS
 
 logging.basicConfig(level=logging.ERROR)
@@ -41,7 +41,7 @@ def run_tocs(parameters):
     return results
 
 def run_flower(parameters):
-    flower_sim = FlowerBuilder()
+    flower_sim = Flower()
     print("Starting FLOWER at {}".format(datetime.datetime.now().isoformat()))
     print("Using {}".format(parameters))
     start = time.time()

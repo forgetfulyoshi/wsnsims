@@ -13,7 +13,7 @@ class SegmentTests(unittest.TestCase):
 
     def test_initialize_traffic(self):
         """
-        Test that we correctly set up the initial data transfers for a group
+        Test that we correctly set up the initial volume transfers for a group
         of segments.
         """
 

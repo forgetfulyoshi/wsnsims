@@ -1,4 +1,5 @@
 import collections
+import itertools
 import logging
 import math
 import statistics
@@ -6,10 +7,11 @@ from collections import defaultdict
 
 import numpy as np
 import quantities as pq
-import scipy.sparse.csgraph as sp
 
 from core import data, environment
 from core.results import Results
+from tocs.energy import ToCSEnergyModel
+from tocs.movement import ToCSMovementModel
 
 # logging.basicConfig(level=logging.DEBUG)
 
@@ -30,112 +32,12 @@ class ToCSRunner(object):
         :type sim: tocs.tocs_sim.ToCS
         """
 
-        #: The simulation data
+        #: The simulation volume
         self.sim = sim
 
         self.env = environment.Environment()
-
-        self._segment_indexes = {}
-
-        #: Cached version of the adjacency matrix. Weights are path lengths.
-        self._adj_mat = self._compute_adjacency_matrix()
-
-        self._distance_mat = self._compute_paths()
-
-    def _compute_adjacency_matrix(self):
-        """
-        Build out the adjacency matrix based on the paths created by the
-        builder. This takes the cluster paths and builds out a matrix suitable
-        for use in Dijkstra's algorithm.
-
-        This routine just sets the value of the self.sim attribute.
-
-        :return: None
-        """
-
-        # for clust in self.sim.clusters + [self.sim.centroid]:
-        #     route = clust.tour
-        #     assert not np.any(np.isinf(route.collection_points))
-
-        # for i, seg in enumerate(self.sim.segments + self.sim.centroid.segments):
-        #     self._segment_indexes[seg] = i
-
-        i = 0
-        for clust in self.sim.clusters + [self.sim.centroid]:
-            for seg_vertex in clust.tour.vertices:
-                seg = clust.tour.objects[seg_vertex]
-                if seg not in self._segment_indexes:
-                    self._segment_indexes[seg] = i
-                    i += 1
-
-        # First we need to get the total number of segments and relay nodes so
-        # we can create an N x N matrix. This is simply the number of segments
-        # plus the number of rendezvous points. As ToCS guarantees a single
-        # rendezvous point per cluster, we can just use the number of clusters.
-
-        node_count = len(self.sim.segments) + len(self.sim.clusters)
-        g_sparse = np.zeros((node_count, node_count), dtype=float)
-        g_sparse[:] = np.inf
-
-        for clust in self.sim.clusters + [self.sim.centroid]:
-            cluster_tour = clust.tour
-            i = len(cluster_tour.vertices) - 1
-            j = 0
-            while j < len(cluster_tour.vertices):
-                start_vertex = cluster_tour.vertices[i]
-                stop_vertex = cluster_tour.vertices[j]
-
-                start_pt = cluster_tour.collection_points[start_vertex]
-                stop_pt = cluster_tour.collection_points[stop_vertex]
-                distance = np.linalg.norm(stop_pt - start_pt)
-
-                start_seg = cluster_tour.objects[start_vertex]
-                stop_seg = cluster_tour.objects[stop_vertex]
-
-                start_index = self._segment_indexes[start_seg]
-                stop_index = self._segment_indexes[stop_seg]
-
-                g_sparse[start_index, stop_index] = distance
-
-                i = j
-                j += 1
-
-        g_sparse = sp.csgraph_from_dense(g_sparse, null_value=np.inf)
-        return g_sparse
-
-    def _compute_paths(self):
-        """
-        Run Dijkstra's algorithm over the adjacency matrix for the paths
-        produced by the simulation.
-
-        :return: The distance matrix based on adjacency matrix self._adj_mat
-        :rtype: np.array
-        """
-
-        distance_mat = sp.dijkstra(self._adj_mat, directed=True)
-        # assert not np.any(np.isinf(distance_mat))
-        if np.any(np.isinf(distance_mat)):
-            print("Found inf distance!!")
-
-        return distance_mat
-
-    def shortest_distance(self, begin, end):
-        """
-        Get the shortest distance between any two segments.
-
-        :param begin:
-        :type begin: core.segment.Segment
-        :param end:
-        :type end: core.segment.Segment
-        :return: float
-        """
-
-        begin_index = self._segment_indexes[begin]
-        end_index = self._segment_indexes[end]
-
-        distance = self._distance_mat[begin_index, end_index]
-        distance *= pq.meter
-        return distance
+        self.movement_model = ToCSMovementModel(self.sim)
+        self.energy_model = ToCSEnergyModel(self.sim)
 
     def print_all_distances(self):
         """
@@ -148,13 +50,14 @@ class ToCSRunner(object):
                      for end in self.sim.segments if begin != end]
 
         for begin, end in seg_pairs:
-            msg = "{} to {} is {}".format(begin, end,
-                                          self.shortest_distance(begin, end))
+            msg = "{} to {} is {}".format(
+                begin, end, self.movement_model.shortest_distance(begin, end))
+
             print(msg)
 
         self.sim.show_state()
 
-    def average_communication_delay(self):
+    def maximum_communication_delay(self):
         """
         Compute the average communication delay across all segments.
 
@@ -171,10 +74,10 @@ class ToCSRunner(object):
             delays.append(delay)
 
         delays = np.array(delays)
-        average_delay = np.mean(delays)
-        average_delay *= pq.second
+        max_delay = np.max(delays)
+        max_delay *= pq.second
 
-        return average_delay
+        return max_delay
 
     def communication_delay(self, begin, end):
         """
@@ -190,7 +93,8 @@ class ToCSRunner(object):
         :rtype: pq.second
         """
 
-        travel_delay = self.shortest_distance(begin, end) / self.env.mdc_speed
+        travel_delay = self.movement_model.shortest_distance(begin,
+                                                             end) / self.env.mdc_speed
 
         if begin.cluster_id == end.cluster_id:
             transmission_count = 1
@@ -201,7 +105,7 @@ class ToCSRunner(object):
             transmission_count = 3
 
         transmission_delay = transmission_count
-        transmission_delay *= data.data(begin, end)
+        transmission_delay *= data.volume(begin, end)
         transmission_delay /= self.env.comms_rate
 
         relay_delay = self.holding_time(begin, end)
@@ -209,8 +113,133 @@ class ToCSRunner(object):
         total_delay = travel_delay + transmission_delay + relay_delay
         return total_delay
 
+    def find_cluster(self, seg):
+        """
+
+        :param seg:
+        :type seg: core.segment.Segment
+        :return:
+        :rtype: tocs.cluster.ToCSCluster
+        """
+
+        cluster_id = seg.cluster_id
+        found_cluster = None
+        for clust in self.sim.clusters + [self.sim.centroid]:
+            if clust.cluster_id == cluster_id:
+                found_cluster = clust
+                break
+
+        if not found_cluster:
+            raise ToCSRunnerError("Could not find cluster for {}".format(seg))
+
+        return found_cluster
+
     def holding_time(self, begin, end):
-        return 0. * pq.second
+        """
+
+        :param begin:
+        :type begin: core.segment.Segment
+        :param end:
+        :type end: core.segment.Segment
+        :return:
+        :rtype: pq.second
+        """
+
+        if begin.cluster_id == end.cluster_id:
+            return 0. * pq.second
+
+        begin_cluster = self.find_cluster(begin)
+        centroid_time = self.tour_time(self.sim.centroid)
+
+        latency = centroid_time
+        for clust in self.sim.clusters:
+            if clust == begin_cluster:
+                continue
+
+            clust_wait = max(0. * pq.second,
+                             self.tour_time(clust) - centroid_time)
+            latency += clust_wait
+
+        return latency
+
+    def tour_time(self, clust):
+        """
+
+        :param clust:
+        :type clust: tocs.cluster.ToCSCluster
+        :return:
+        :rtype: pq.second
+        """
+
+        travel_time = clust.tour_length / self.env.mdc_speed
+
+        # Compute the time required to upload and download all data from each
+        # segment in the cluster. This has to include both inter- and intra-
+        # cluster data. Because of this, we're going to simply enumerate all
+        # segments and for each one in the cluster, sum the data sent to the
+        # segment. Similarly, for each segment in the cluster, we will sum the
+        # data sent from the segment to all other segments.
+
+        data_volume = 0. * pq.bit
+        pairs = itertools.product(clust.segments, self.sim.segments)
+        for src, dst in pairs:
+            if src == dst:
+                continue
+
+            data_volume += data.volume(src, dst)
+            data_volume += data.volume(dst, src)
+
+        transmit_time = data_volume / self.env.comms_rate
+        total_time = travel_time + transmit_time
+        return total_time
+
+    def energy_balance(self):
+        """
+
+        :return:
+        :rtype: pq.J
+        """
+
+        energy = list()
+        for clust in self.sim.clusters + [self.sim.centroid]:
+            energy.append(self.energy_model.total_energy(clust.cluster_id))
+
+        balance = np.std(energy) * pq.J
+        return balance
+
+    def average_energy(self):
+        """
+
+        :return:
+        :rtype: pq.J
+        """
+        energy = list()
+        for clust in self.sim.clusters + [self.sim.centroid]:
+            energy.append(self.energy_model.total_energy(clust.cluster_id))
+
+        average = np.mean(energy) * pq.J
+        return average
+
+    def max_buffer_size(self):
+
+        data_volumes = list()
+        for current in self.sim.clusters + [self.sim.centroid]:
+
+            external_segments = [s for s in self.sim.segments if
+                                 s.cluster_id != current.cluster_id]
+
+            pairs = itertools.product(external_segments, current.segments)
+
+            incoming = np.sum(
+                [data.volume(src, dst) for src, dst in pairs]) * pq.bit
+
+            outgoing = np.sum(
+                [data.volume(src, dst) for dst, src in pairs]) * pq.bit
+
+            data_volumes.append(incoming + outgoing)
+
+        max_data_volume = np.max(data_volumes) * pq.bit
+        return max_data_volume
 
 
 def comm_delay(src, dst, sim):
@@ -226,7 +255,7 @@ def comm_delay(src, dst, sim):
         multiplier = 3
         d_r = hold_time(src, dst, sim)
 
-    d_c = multiplier / sim.transmission_rate * data.data(src, dst)
+    d_c = multiplier / sim.transmission_rate * data.volume(src, dst)
     delay = d_t + d_c + d_r
 
     return delay
@@ -510,9 +539,11 @@ def buffer_space_required(sim):
         arrivals = max(1, len(mdc_centroid_visits))
 
         segs = clust.segments
-        intercluster_outbound = [data.data(src, dst) for src in segs for dst in
+        intercluster_outbound = [data.volume(src, dst) for src in segs for dst
+                                 in
                                  sim.segments if dst not in segs]
-        intercluster_inbound = [data.data(src, dst) for src in sim.segments if
+        intercluster_inbound = [data.volume(src, dst) for src in sim.segments
+                                if
                                 src not in segs for dst in segs]
 
         total_data = sum(intercluster_outbound) * arrivals
@@ -537,9 +568,10 @@ def compute_timestamps(sim, rounds=1):
             for idx, seg in enumerate(tour):
                 if (timestamp > 0) or (len(tour) == 1):
                     # compute upload / download time
-                    upload = [data.data(seg, dst) for dst in sim.segments if
+                    upload = [data.volume(seg, dst) for dst in sim.segments if
                               dst != seg]
-                    download = [data.data(src, seg) for src in sim.segments if
+                    download = [data.volume(src, seg) for src in sim.segments
+                                if
                                 src != seg]
 
                     upload_size = sum(upload)
@@ -547,11 +579,12 @@ def compute_timestamps(sim, rounds=1):
 
                     if seg in sim.centroid.segments:
                         outbound = sum(
-                            data.data(src, dst) for src in clust.segments for
+                            data.volume(src, dst) for src in clust.segments for
                             dst in sim.segments if
                             dst not in clust.segments)
                         inbound = sum(
-                            data.data(src, dst) for src in sim.segments for dst
+                            data.volume(src, dst) for src in sim.segments for
+                            dst
                             in clust.segments if
                             src not in clust.segments)
 
@@ -596,13 +629,15 @@ def compute_timestamps(sim, rounds=1):
                     segs = dl_cluster.segments
                     others = [s for s in sim.segments if s not in segs]
                     download_size += sum(
-                        data.data(src, dst) for src in segs for dst in others)
+                        data.volume(src, dst) for src in segs for dst in
+                        others)
 
                 for ul_cluster in ul_clusters:
                     segs = ul_cluster.segments
                     others = [s for s in sim.segments if s not in segs]
                     upload_size += sum(
-                        data.data(src, dst) for src in others for dst in segs)
+                        data.volume(src, dst) for src in others for dst in
+                        segs)
 
                 total_size = download_size + upload_size
                 comms_time = total_size / sim.transmission_rate
@@ -613,9 +648,9 @@ def compute_timestamps(sim, rounds=1):
                 comms_time = 0
 
         else:
-            upload = [data.data(seg, dst) for dst in sim.segments if
+            upload = [data.volume(seg, dst) for dst in sim.segments if
                       dst != seg]
-            download = [data.data(src, seg) for src in sim.segments if
+            download = [data.volume(src, seg) for src in sim.segments if
                         src != seg]
 
             upload_size += sum(upload)

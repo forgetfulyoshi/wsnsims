@@ -13,13 +13,12 @@ class CoreClusterError(Exception):
 
 
 class BaseCluster(object):
-
-    cluster_count = 0
+    count = 0
 
     def __init__(self):
 
-        self.cluster_id = BaseCluster.cluster_count
-        BaseCluster.cluster_count += 1
+        self._cluster_id = BaseCluster.count
+        BaseCluster.count += 1
 
         #: List of elements contained in the cluster. These are typically
         #: segments. The only requirement is that the objects have a "location"
@@ -49,6 +48,14 @@ class BaseCluster(object):
     def _invalidate_cache(self) -> None:
         self._location = None
         self._tour = None
+
+    @property
+    def cluster_id(self):
+        return self._cluster_id
+
+    @cluster_id.setter
+    def cluster_id(self, value):
+        self._cluster_id = value
 
     @property
     def relay_node(self):
@@ -110,6 +117,12 @@ class BaseCluster(object):
         self._nodes = value
 
     def add(self, node):
+        """
+
+        :param node:
+        :type node: core.segment.Segment
+        :return:
+        """
         if node not in self.nodes:
             logging.debug("Adding %s to %s", node, self)
             node.cluster_id = self.cluster_id
@@ -124,39 +137,8 @@ class BaseCluster(object):
         node.cluster_id = -1
         self._invalidate_cache()
 
-    def motion_energy(self):
-        cost = params.MOVEMENT_COST * self.tour_length
-        return cost
-
-    def data_volume_bits(self, all_clusters, all_nodes):
-        # Volume in megabits
-        data_volume = self.data_volume_mbits(all_clusters, all_nodes)
-
-        # Volume in bits
-        data_volume *= 1024 * 1024
-        return data_volume
-
-    def data_volume_mbits(self, all_clusters, all_nodes):
-        raise NotImplementedError()
-
-    def communication_energy(self, all_clusters, all_nodes):
-        # Volume in bits
-        data_volume = self.data_volume_bits(all_clusters, all_nodes)
-
-        e_c = data_volume * (
-            params.ALPHA + params.BETA * pow(params.COMMUNICATION_RANGE,
-                                             params.DELTA))
-        # e_c = data_volume * 2.0 * pow(10, -6)
-
-        return e_c
-
-    def total_energy(self, all_clusters, all_nodes):
-        total = self.motion_energy() + self.communication_energy(all_clusters,
-                                                                 all_nodes)
-        return total
-
-    def merge(self, other):
-        new_cluster = type(self)()
+    def merge(self, other, *args, **kwargs):
+        new_cluster = type(self)(*args, **kwargs)
         new_cluster.nodes = list(OrderedSet(self.nodes + other.nodes))
         return new_cluster
 
@@ -181,7 +163,7 @@ def combine_clusters(clusters, centroid):
     new_cluster = c_i.merge(c_j)
 
     for node in new_cluster.nodes:
-        node.cluster = new_cluster
+        node.cluster_id = new_cluster.cluster_id
 
     new_clusters.remove(c_i)
     new_clusters.remove(c_j)
@@ -189,7 +171,7 @@ def combine_clusters(clusters, centroid):
     return new_clusters
 
 
-def closest_nodes(cluster_1, cluster_2, cell_distance=True):
+def closest_nodes(cluster_1, cluster_2, dist=None):
     if isinstance(cluster_1, BaseCluster):
         node_list_1 = cluster_1.nodes
     else:
@@ -202,12 +184,13 @@ def closest_nodes(cluster_1, cluster_2, cell_distance=True):
 
     pairs = itertools.product(node_list_1, node_list_2)
 
-    if cell_distance:
-        decorated = [(cell_1.cell_distance(cell_2), i, cell_1, cell_2) for
+    if dist:
+        decorated = [(dist(cell_1, cell_2), i, cell_1, cell_2) for
                      i, (cell_1, cell_2) in enumerate(pairs)]
     else:
-        decorated = [(cell_1.distance(cell_2), i, cell_1, cell_2) for
-                     i, (cell_1, cell_2) in enumerate(pairs)]
+        decorated = [(np.linalg.norm(cell_1.location.nd - cell_2.location.nd),
+                      i, cell_1, cell_2)
+                     for i, (cell_1, cell_2) in enumerate(pairs)]
 
     closest = min(decorated)
     cells = closest[2], closest[3]
@@ -221,3 +204,15 @@ def closest_points(points_1, points_2):
     closest = min(decorated)
     points = closest[2], closest[3]
     return points
+
+
+class RelayNode(object):
+    def __init__(self, position):
+        self.location = point.Vec2(position)
+        self.cluster_id = -1
+
+    def __str__(self):
+        return "RelayNode {}".format(self.location)
+
+    def __repr__(self):
+        return "RN{}".format(self.location)

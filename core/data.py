@@ -5,7 +5,7 @@ from core import environment
 data_memo = {}
 
 
-def data(src, dst):
+def volume(src, dst):
     if (src, dst) in data_memo:
         return data_memo[(src, dst)]
 

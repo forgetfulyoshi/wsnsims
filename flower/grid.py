@@ -2,117 +2,101 @@
 
 import itertools
 import logging
-import math
 
-from core import point, params
-from flower import params
+import numpy as np
+import quantities as pq
 
-
-class GridPositionMixin(object):
-    """Describes a position on the grid"""
-
-    def __init__(self, row=0, col=0):
-        self._row = int(row)
-        self._col = int(col)
-
-    def __eq__(self, other):
-        return [self.row, self.col] == [other.row, other.col]
-
-    def __hash__(self):
-        return hash((self.row, self.col))
-
-    @property
-    def row(self):
-        """ Get the row coordinate """
-        return self._row
-
-    @row.setter
-    def row(self, value):
-        self._row = int(value)
-
-    @property
-    def col(self):
-        """ Get the column coordinate """
-        return self._col
-
-    @col.setter
-    def col(self, value):
-        """ Set the column coordinate """
-        self._col = int(value)
-
-    def cell_distance(self, other):
-        """ Calculate cell distance as per the FLOWER paper """
-        dist = max(abs(self.row - other.row), abs(self.col - other.col))
-        return dist
+from core import point
+from core import environment
 
 
 class Grid(object):
     """ Define the simulation grid """
 
-    def __init__(self, width, hieght):
-        self.width = width
-        self.hieght = hieght
+    def __init__(self, segments):
+        """
+
+        :param segments:
+        :type segments: np.array
+        """
+        self.segments = segments
         self.rows = 0
         self.cols = 0
+
+        self._env = environment.Environment()
+        self.width = self._env.grid_width
+        self.height = self._env.grid_height
 
         self._grid = list()
         self._layout_cells()
 
     def _layout_cells(self):
         logging.info("Cell side length: %s", Cell.side_len)
-        logging.info("Original dimensions: %s x %s", self.width, self.hieght)
+        logging.info("Original dimensions: %s x %s", self.width, self.height)
 
-        #
-        # First, adjust the physical size of the grid to accomodate whole
+        # First, adjust the physical size of the grid to accommodate whole
         # cells. This keeps us from having partial cells in the simulation.
-        #
-        self.width = round(self.width / Cell.side_len) * Cell.side_len
-        self.hieght = round(self.hieght / Cell.side_len) * Cell.side_len
+        self.width = np.round(self.width / Cell.side_len) * Cell.side_len
+        self.height = np.round(self.height / Cell.side_len) * Cell.side_len
 
-        logging.info("Adjusted dimensions: %s x %s", self.width, self.hieght)
+        logging.info("Adjusted dimensions: %s x %s", self.width, self.height)
 
-        #
-        # Now, calculate the number of cells per row and column
-        #
-        self.rows = int((self.hieght / Cell.side_len))
-        self.cols = int((self.width / Cell.side_len))
+        # Now, calculate the number of cells per row and column. This also
+        # makes the row and column counts unit-less.
+        self.rows = int(self.height / Cell.side_len)
+        self.cols = int(self.width / Cell.side_len)
 
-        #
-        # Initialize the grid with empty cells
-        #
-        self._grid = [[Cell() for _ in range(self.cols)] for _ in
-                      range(self.rows)]
+        # Initialize the grid
+        self._grid = list()
+        for row in range(self.rows):
+            new_row = list()
+            for col in range(self.cols):
+                new_cell = Cell(row, col)
+                new_row.append(new_cell)
 
-        #
-        # Now go back over the grid and do basic cell initialization
-        #
-        for row_num, row in enumerate(self._grid):
-            for col_num, cell in enumerate(row):
-                cell.row = row_num
-                cell.col = col_num
+            self._grid.append(new_row)
 
-                physical_pos = self.cell_position(row_num, col_num)
-                cell.x = physical_pos.x
-                cell.y = physical_pos.y
-
-                cell.neighbors = self.cell_neighbors(row_num, col_num)
+        for row in range(self.rows):
+            for col in range(self.cols):
+                current_cell = self.cell(row, col)
+                current_cell.neighbors = self.cell_neighbors(row, col)
+                current_cell.segments = self.cell_segments(current_cell)
 
     def cells(self):
+        """
+        Get an iterator over all cells in the grid
+        :rtype: collections.Iterator(Cell)
+        """
         for row in self._grid:
             for cell in row:
                 yield cell
 
     def cell(self, row, col):
-        """ Given a row and col, return the actual Cell object """
+        """
+        Given a row and col, return the actual Cell object.
+        :rtype: Cell
+        """
+
         return self._grid[row][col]
 
-    @staticmethod
-    def cell_position(row, col):
-        """ Given a row and col, calculate the physical position of a cell """
+    def cell_segments(self, cell):
+        """
+        Find all segments within range of the given cell.
 
-        x_coord = col * Cell.side_len + (Cell.side_len / 2.0)
-        y_coord = row * Cell.side_len + (Cell.side_len / 2.0)
-        return point.Vec2(x_coord, y_coord)
+        :param cell:
+        :type cell: Cell
+        :return: The list of segments.
+        :rtype: list(core.segment.Segment)
+        """
+
+        segments = list()
+        radio_range = self._env.comms_range
+        for seg in self.segments:
+            distance = np.linalg.norm(cell.location.nd - seg.location.nd)
+            if distance < radio_range:
+                segments.append(seg)
+
+        return segments
 
     def on_grid(self, coordinates):
         (row, col) = coordinates
@@ -158,29 +142,67 @@ class Grid(object):
 class Cell(object):
     """ Defines a cell in the grid """
 
-    side_len = params.COMMUNICATION_RANGE / math.sqrt(2)
-    count = 1
+    count = 0
+    side_len = environment.Environment().comms_range / np.sqrt(2)
 
-    def __init__(self, nd):
-        self.location = point.Vec2(nd)
-        self.collection_point = point.Vec2(nd)
-
-        self.segments = list()
-
-        self.neighbors = list()
-        self.access = 0
-        self.signal_hop_count = 0
-        self.proximity = 0
-
-        self.virtual_cluster_id = params.NOT_CLUSTERED
-        self.cluster_id = params.NOT_CLUSTERED
-        self.cluster = None
-
-        self._cell_id = Cell.count
+    def __init__(self, row, column):
+        self.cell_id = Cell.count
         Cell.count += 1
 
+        # Maintain the grid position.
+        self.grid_location = np.array([row, column])
+
+        # Calculate the physical location of the center of this cell.
+        x_pos = column * Cell.side_len + (Cell.side_len / 2.)
+        y_pos = row * Cell.side_len + (Cell.side_len / 2.)
+        self.location = point.Vec2(np.array([x_pos, y_pos]) * pq.meter)
+
+        # The segments within radio range of this cell.
+        self.segments = list()
+
+        # The (maximum eight) cells immediately adjacent to this cell.
+        self.neighbors = list()
+
+        # The number of segments within radio range of any neighbor cell
+        self.signal_hop_count = 0
+
+        # The cell distance between this cell and the centroid cell, G.
+        self.proximity = 0
+
+        # The numeric identifier of the virtual cluster this cell belongs to.
+        self.virtual_cluster_id = -1
+
+        # The numeric identifier of the cluster this cell belongs to.
+        self.cluster_id = -1
+
+        # The numeric identifier of the virtual cluster this cell belongs to.
+        self.virtual_cluster_id = -1
+
+    @property
+    def access(self):
+        """
+        The number of segments within radio range of this cell.
+        """
+        return len(self.segments)
+
     def __str__(self):
-        return "Cell %d (Cluster %d)" % (self._cell_id, self.cluster_id)
+        return "Cell {}".format(self.cell_id)
 
     def __repr__(self):
-        return "Cell %d" % (self._cell_id,)
+        return "C {}".format(self.cell_id)
+
+
+def cell_distance(lhs, rhs):
+    """
+
+    :param lhs:
+    :type lhs: Cell
+    :param rhs:
+    :type rhs: Cell
+    :return: The cell distance between lhs and rhs
+    """
+
+    row_dist = np.abs(lhs.grid_location[0] - rhs.grid_location[0])
+    col_dist = np.abs(lhs.grid_location[1] - rhs.grid_location[1])
+    distance = np.max([row_dist, col_dist])
+    return distance

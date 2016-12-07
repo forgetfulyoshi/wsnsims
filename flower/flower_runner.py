@@ -6,7 +6,6 @@ from collections import defaultdict
 
 from core import data, point
 from core.results import Results
-from flower import point
 
 # logging.basicConfig(level=logging.DEBUG)
 
@@ -81,7 +80,7 @@ def comm_delay(src_segment, dst_segment, sim):
         multiplier = 3
         d_r = hold_time(src_segment, dst_segment, sim)
 
-    d_c = multiplier / sim.transmission_rate * data.data(src_segment, dst_segment)
+    d_c = multiplier / sim.transmission_rate * data.volume(src_segment, dst_segment)
 
     delay = d_t + d_c + d_r
 
@@ -389,8 +388,8 @@ def buffer_space_required(sim):
         for c in clust.cells:
             segs.extend(c.segments)
 
-        intercluster_outbound = [data.data(src, dst) for src in segs for dst in sim.segments if dst not in segs]
-        intercluster_inbound = [data.data(src, dst) for src in sim.segments if src not in segs for dst in segs]
+        intercluster_outbound = [data.volume(src, dst) for src in segs for dst in sim.segments if dst not in segs]
+        intercluster_inbound = [data.volume(src, dst) for src in sim.segments if src not in segs for dst in segs]
 
         total_data = sum(intercluster_outbound) * arrivals
         total_data += sum(intercluster_inbound)
@@ -415,17 +414,17 @@ def compute_timestamps(sim, rounds=1):
             for idx, cell in enumerate(tour):
                 if (timestamp > 0) or (len(tour) == 1):
                     # compute upload / download time
-                    upload = [data.data(src, dst) for src in cell.segments for dst in sim.segments if dst != src]
-                    download = [data.data(src, dst) for dst in cell.segments for src in sim.segments if dst != src]
+                    upload = [data.volume(src, dst) for src in cell.segments for dst in sim.segments if dst != src]
+                    download = [data.volume(src, dst) for dst in cell.segments for src in sim.segments if dst != src]
 
                     upload_size = sum(upload)
                     download_size = sum(download)
 
                     if cell in sim.hub.cells:
                         outbound = sum(
-                            data.data(src, dst) for src in local_segs for dst in sim.segments if dst not in local_segs)
+                            data.volume(src, dst) for src in local_segs for dst in sim.segments if dst not in local_segs)
                         inbound = sum(
-                            data.data(src, dst) for src in sim.segments for dst in local_segs if src not in local_segs)
+                            data.volume(src, dst) for src in sim.segments for dst in local_segs if src not in local_segs)
 
                         upload_size += outbound
                         download_size += inbound
@@ -467,7 +466,7 @@ def compute_timestamps(sim, rounds=1):
 
                     others = [s for s in sim.segments if s not in local_segs]
                     download_size += sum(
-                        data.data(src, dst) for src in local_segs for dst in others)
+                        data.volume(src, dst) for src in local_segs for dst in others)
 
                 for ul_cluster in ul_clusters:
                     local_segs = []
@@ -476,7 +475,7 @@ def compute_timestamps(sim, rounds=1):
 
                     others = [s for s in sim.segments if s not in local_segs]
                     upload_size += sum(
-                        data.data(src, dst) for src in others for dst in local_segs)
+                        data.volume(src, dst) for src in others for dst in local_segs)
 
                 total_size = download_size + upload_size
                 comms_time = total_size / sim.transmission_rate
@@ -486,8 +485,8 @@ def compute_timestamps(sim, rounds=1):
                 comms_time = 0
 
         else:
-            upload = [data.data(src, dst) for src in cell.segments for dst in sim.segments if dst != src]
-            download = [data.data(src, dst) for dst in cell.segments for src in sim.segments if dst != src]
+            upload = [data.volume(src, dst) for src in cell.segments for dst in sim.segments if dst != src]
+            download = [data.volume(src, dst) for dst in cell.segments for src in sim.segments if dst != src]
 
             upload_size += sum(upload)
             download_size += sum(download)
