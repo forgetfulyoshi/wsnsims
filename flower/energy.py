@@ -1,3 +1,5 @@
+import itertools
+
 import numpy as np
 import quantities as pq
 
@@ -20,11 +22,7 @@ class FlowerEnergyModel(object):
         self.sim = simulation_data
         self.env = core.environment.Environment()
 
-        self._ids_to_clusters = {}
-        self._ids_to_movement_energy = {}
-        self._ids_to_comms_energy = {}
-
-    def _cluster_data_volume(self, cluster_id):
+    def _cluster_data_volume(self, clust):
         """
 
         :param cluster_id:
@@ -32,20 +30,19 @@ class FlowerEnergyModel(object):
         :rtype: pq.bit
         """
 
-        current_cluster = self._find_cluster(cluster_id)
+        current_cluster = clust
 
         # Handle all intra-cluster volume
         cluster_segs = current_cluster.segments
 
-        intracluster_seg_pairs = [(src, dst) for src in cluster_segs for dst in
-                                  cluster_segs if src != dst]
-
+        intracluster_seg_pairs = itertools.permutations(cluster_segs, 2)
         data_vol = np.sum([core.data.volume(src, dst) for src, dst in
                            intracluster_seg_pairs]) * pq.bit
 
         # Handle inter-cluster volume at the rendezvous point
         other_segs = [c for c in self.sim.segments if
-                      c.cluster_id != cluster_id]
+                      c.cluster_id != current_cluster.cluster_id]
+
         intercluster_seg_pairs = [(src, dst) for src in cluster_segs for dst in
                                   other_segs]
         intercluster_seg_pairs += [(src, dst) for src in other_segs for dst in
@@ -57,7 +54,7 @@ class FlowerEnergyModel(object):
 
         return data_vol
 
-    def _hub_data_volume(self, cluster_id):
+    def _hub_data_volume(self, clust):
         """
 
         :param cluster_id:
@@ -65,7 +62,7 @@ class FlowerEnergyModel(object):
         :rtype: pq.bit
         """
 
-        current_cluster = self._find_cluster(cluster_id)
+        current_cluster = clust
 
         # Handle all intra-cluster volume for the hub
         if current_cluster.segments:
@@ -78,13 +75,13 @@ class FlowerEnergyModel(object):
             data_vol = 0. * pq.bit
 
         # Handle inter-cluster volume for other clusters
-        for clust in self.sim.clusters:
-            if clust.cluster_id == cluster_id:
+        for c in self.sim.clusters:
+            if c.cluster_id == current_cluster.cluster_id:
                 continue
 
-            local_segs = clust.segments
+            local_segs = c.segments
             remote_segs = [seg for seg in self.sim.segments if
-                           seg.cluster_id != cluster_id]
+                           seg.cluster_id != current_cluster.cluster_id]
 
             # Generate the pairs of local-to-remote segments
             seg_pairs = [(seg_1, seg_2) for seg_1 in local_segs for seg_2 in
@@ -103,26 +100,26 @@ class FlowerEnergyModel(object):
 
         return data_vol
 
-    def total_comms_energy(self, cluster_id):
+    def total_comms_energy(self, clust):
 
         # if cluster_id in self._ids_to_comms_energy:
         #     return self._ids_to_comms_energy[cluster_id]
 
-        if cluster_id == self.sim.hub.cluster_id:
-            data_volume = self._hub_data_volume(cluster_id)
+        if clust == self.sim.hub:
+            data_volume = self._hub_data_volume(clust)
 
-        elif cluster_id == self.sim.virtual_hub.cluster_id:
-            data_volume = self._hub_data_volume(cluster_id)
+        elif clust == self.sim.virtual_hub:
+            data_volume = self._hub_data_volume(clust)
 
         else:
-            data_volume = self._cluster_data_volume(cluster_id)
+            data_volume = self._cluster_data_volume(clust)
 
         energy = data_volume * self.env.comms_cost
         # self._ids_to_comms_energy[cluster_id] = energy
 
         return energy
 
-    def _find_cluster(self, cluster_id):
+    def _find_cluster(self, cluster_id, is_virtual):
         """
 
         :param cluster_id:
@@ -132,9 +129,10 @@ class FlowerEnergyModel(object):
         # if cluster_id in self._ids_to_clusters:
         #     return self._ids_to_clusters[cluster_id]
 
-        all_clusters = self.sim.clusters + self.sim.virtual_clusters
-        all_clusters.append(self.sim.hub)
-        all_clusters.append(self.sim.virtual_hub)
+        if is_virtual:
+            all_clusters = self.sim.virtual_clusters + [self.sim.virtual_hub]
+        else:
+            all_clusters = self.sim.clusters + [self.sim.hub]
 
         found_cluster = None
         for clust in all_clusters:
@@ -149,12 +147,12 @@ class FlowerEnergyModel(object):
         # self._ids_to_clusters[cluster_id] = found_cluster
         return found_cluster
 
-    def total_movement_energy(self, cluster_id):
+    def total_movement_energy(self, clust):
         """
         Return the amount of energy required to complete a single tour of the
         specified cluster.
 
-        :param cluster_id: The numeric identifier of the cluster.
+        :param clust: An instance of a FLOWER cluster.
 
         :return: The amount of energy required.
         :rtype: pq.J
@@ -163,12 +161,11 @@ class FlowerEnergyModel(object):
         # if cluster_id in self._ids_to_movement_energy:
         #     return self._ids_to_movement_energy[cluster_id]
 
-        current_cluster = self._find_cluster(cluster_id)
-        energy = current_cluster.tour_length * self.env.move_cost
+        energy = clust.tour_length * self.env.move_cost
         # self._ids_to_movement_energy[cluster_id] = energy
         return energy
 
-    def total_energy(self, cluster_id):
+    def total_energy(self, cluster_id, virtual):
         """
         Get the sum of communication and movement energy for the given cluster.
 
@@ -176,9 +173,9 @@ class FlowerEnergyModel(object):
         :return:
         :rtype: pq.J
         """
-
-        energy = self.total_comms_energy(cluster_id)
-        energy += self.total_movement_energy(cluster_id)
+        clust = self._find_cluster(cluster_id, virtual)
+        energy = self.total_comms_energy(clust)
+        energy += self.total_movement_energy(clust)
         return energy
 
     def total_sim_movement_energy(self, virtual=False):
@@ -192,10 +189,10 @@ class FlowerEnergyModel(object):
         total_energy = 0. * pq.J
         if virtual:
             for clust in self.sim.virtual_clusters + [self.sim.virtual_hub]:
-                total_energy += self.total_movement_energy(clust.cluster_id)
+                total_energy += self.total_movement_energy(clust)
         else:
             for clust in self.sim.clusters + [self.sim.hub]:
-                total_energy += self.total_movement_energy(clust.cluster_id)
+                total_energy += self.total_movement_energy(clust)
 
         return total_energy
 
@@ -210,9 +207,9 @@ class FlowerEnergyModel(object):
         total_energy = 0. * pq.J
         if virtual:
             for clust in self.sim.virtual_clusters + [self.sim.virtual_hub]:
-                total_energy += self.total_comms_energy(clust.cluster_id)
+                total_energy += self.total_comms_energy(clust)
         else:
             for clust in self.sim.clusters + [self.sim.hub]:
-                total_energy += self.total_comms_energy(clust.cluster_id)
+                total_energy += self.total_comms_energy(clust)
 
         return total_energy

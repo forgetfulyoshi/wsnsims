@@ -4,7 +4,7 @@ import logging
 import numpy as np
 import quantities as pq
 
-from core import params, tour, environment, linalg, point
+from core import tour, environment, linalg, point
 from core.orderedset import OrderedSet
 
 
@@ -141,34 +141,6 @@ class BaseCluster(object):
         new_cluster = type(self)(*args, **kwargs)
         new_cluster.nodes = list(OrderedSet(self.nodes + other.nodes))
         return new_cluster
-
-
-def combine_clusters(clusters, centroid):
-    index = 0
-    decorated = list()
-
-    cluster_pairs = itertools.combinations(clusters, 2)
-    for c_i, c_j in cluster_pairs:
-        tc_1 = c_i.merge(c_j).merge(centroid)
-        tc_2 = c_i.merge(centroid)
-
-        combination_cost = tc_1.tour_length - tc_2.tour_length
-        decorated.append((combination_cost, index, c_i, c_j))
-        index += 1
-
-    cost, _, c_i, c_j = min(decorated)
-    logging.info("Combining %s and %s (Cost: %f)", c_i, c_j, cost)
-
-    new_clusters = list(clusters)
-    new_cluster = c_i.merge(c_j)
-
-    for node in new_cluster.nodes:
-        node.cluster_id = new_cluster.cluster_id
-
-    new_clusters.remove(c_i)
-    new_clusters.remove(c_j)
-    new_clusters.append(new_cluster)
-    return new_clusters
 
 
 def closest_nodes(cluster_1, cluster_2, dist=None):

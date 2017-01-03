@@ -59,7 +59,7 @@ class Grid(object):
         for row in range(self.rows):
             for col in range(self.cols):
                 current_cell = self.cell(row, col)
-                current_cell.neighbors = self.cell_neighbors(row, col)
+                current_cell.neighbors = self.cell_neighbors(current_cell)
                 current_cell.segments = self.cell_segments(current_cell)
 
     def cells(self):
@@ -108,7 +108,10 @@ class Grid(object):
 
         return True
 
-    def cell_neighbors(self, row, col, radius=1):
+    def cell_neighbors(self, cell, radius=1):
+
+        row = cell.grid_location[0]
+        col = cell.grid_location[1]
 
         #
         # First, generate the set of possible coordinates
@@ -173,10 +176,15 @@ class Cell(object):
         self.virtual_cluster_id = -1
 
         # The numeric identifier of the cluster this cell belongs to.
-        self.cluster_id = -1
+        self._cluster_id = -1
 
-        # The numeric identifier of the virtual cluster this cell belongs to.
-        self.virtual_cluster_id = -1
+    @property
+    def cluster_id(self):
+        return self._cluster_id
+
+    @cluster_id.setter
+    def cluster_id(self, value):
+        self._cluster_id = value
 
     @property
     def access(self):

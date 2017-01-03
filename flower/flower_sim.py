@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import quantities as pq
 
-from core.cluster import combine_clusters
+from flower.cluster import combine_virtual_clusters
 from core.cluster import closest_nodes
 from core import environment
 from core import segment
@@ -86,12 +86,12 @@ class Flower(object):
 
         # Draw lines between each cell the virtual clusters to illustrate the
         # virtual cluster formations.
-        for clust in self.virtual_clusters:
+        for clust in self.clusters:
             route = clust.tour
             cps = route.collection_points
             ax.plot(cps[:, 0], cps[:, 1], 'go')
-            ax.plot(cps[route.vertices, 0], cps[route.vertices, 1],
-                    'g--', lw=2)
+            ax.plot(cps[route.vertices, 0], cps[route.vertices, 1], 'g--',
+                    lw=2)
 
         plt.show()
 
@@ -196,7 +196,7 @@ class Flower(object):
 
         virtual_clusters = list()
         for cell in self.cells:
-            c = FlowerVirtualCluster(self.virtual_hub)
+            c = FlowerVirtualCluster()
             c.add(cell)
             virtual_clusters.append(c)
 
@@ -204,8 +204,8 @@ class Flower(object):
         # clusters
         while len(virtual_clusters) >= self.env.mdc_count:
             logging.info("Current VCs: %r", virtual_clusters)
-            virtual_clusters = combine_clusters(virtual_clusters,
-                                                self.virtual_hub)
+            virtual_clusters = combine_virtual_clusters(virtual_clusters,
+                                                        self.virtual_hub)
 
         # FLOWER has some dependencies on the order of cluster IDs, so we need
         # to sort and re-label each virtual cluster.
@@ -222,7 +222,7 @@ class Flower(object):
     def handle_large_em(self):
 
         for vc in self.virtual_clusters:
-            c = FlowerCluster(self.hub)
+            c = FlowerCluster()
             c.cluster_id = vc.cluster_id
 
             # closest_cell, _ = closest_nodes(vc, self.hub)
@@ -241,18 +241,18 @@ class Flower(object):
         # in rounds, start optimizing
         all_clusters = self.clusters + [self.hub]
 
-        r = 0
-        while True:
+        for r in range(101):
+            logging.debug("Starting round %d of Em >> Ec", r)
 
             if r > 100:
                 raise FlowerError("Optimization got lost")
 
-            stdev = np.std([self.energy_model.total_energy(c.cluster_id)
-                            for c in all_clusters])
+            self.update_anchors()
 
-            c_most = max(all_clusters,
-                         key=lambda x: self.energy_model.total_energy(
-                             x.cluster_id))
+            stdev = self.energy_balance()
+            logging.debug("Current energy balance is %f", stdev)
+
+            c_most = self.highest_energy_cluster()
 
             # get the neighbors of c_most
             neighbors = [c for c in all_clusters if
@@ -269,10 +269,8 @@ class Flower(object):
             neighbor.add(c_out)
 
             # emulate a do ... while loop
-            stdev_new = np.std(
-                [self.total_cluster_energy(c) for c in all_clusters])
-            r += 1
-            logging.info("Completed %d rounds of Ec >> Em", r)
+            stdev_new = self.energy_balance()
+            logging.info("Completed %d rounds of Ec >> Em", r + 1)
 
             # if this round didn't reduce stdev, then revert the changes and
             # exit the loop
@@ -285,8 +283,11 @@ class Flower(object):
 
         # First round (initial cell setup and energy calculation)
 
+        for c in self.cells:
+            c.cluster_id = -1
+
         for vc in self.virtual_clusters:
-            c = FlowerCluster(self.hub)
+            c = FlowerCluster()
             c.cluster_id = vc.cluster_id
 
             closest_cell, _ = closest_nodes(vc, self.hub)
@@ -397,8 +398,7 @@ class Flower(object):
                 else:
                     for i in range(1, max(self.grid.cols, self.grid.rows) + 1):
                         recent = c_least.recent
-                        nbrs = self.grid.cell_neighbors(recent.row, recent.col,
-                                                        radius=i)
+                        nbrs = self.grid.cell_neighbors(recent, radius=i)
 
                         for nbr in nbrs:
                             # filter out cells that are not part of a virtual
@@ -435,85 +435,111 @@ class Flower(object):
                         r, c_least)
 
     def total_cluster_energy(self, c):
-        energy = self.energy_model.total_energy(c.cluster_id)
+        virtual = c in self.virtual_clusters + [self.virtual_hub]
+
+        energy = self.energy_model.total_energy(c.cluster_id, virtual)
+        logging.debug("%s requires %s to traverse.", c, energy)
         return energy
+
+    def highest_energy_cluster(self):
+        all_clusters = self.clusters + [self.hub]
+        highest = max(all_clusters, key=lambda x: self.total_cluster_energy(x))
+        return highest
+
+    def lowest_energy_cluster(self):
+        all_clusters = self.clusters + [self.hub]
+        lowest = min(all_clusters, key=lambda x: self.total_cluster_energy(x))
+        return lowest
+
+    def energy_balance(self):
+        all_clusters = self.clusters + [self.hub]
+        balance = np.std([self.total_cluster_energy(c) for c in all_clusters])
+        return balance
+
+    def update_anchors(self):
+        if not self.hub.cells:
+            for clust in self.clusters:
+                clust.anchor = None
+        else:
+            for clust in self.clusters:
+                if not clust.cells:
+                    continue
+
+                # Find node in the hub that is closest to one in the cluster
+                _, anchor = closest_nodes(clust, self.hub)
+                clust.anchor = anchor
 
     def optimization(self):
 
-        all_clusters = self.clusters + [self.hub]
+        for r in range(101):
 
-        r = 0
-        while True:
-
-            stdev = np.std(
-                [self.total_cluster_energy(c) for c in all_clusters])
-            c_least = min(all_clusters,
-                          key=lambda x: self.total_cluster_energy(x))
-            c_most = max(all_clusters,
-                         key=lambda x: self.total_cluster_energy(x))
+            logging.debug("Starting round %d of optimization", r)
+            self.show_state()
 
             if r > 100:
                 raise FlowerError("Optimization got lost")
 
+            self.update_anchors()
+
+            balance = self.energy_balance()
+            c_least = self.lowest_energy_cluster()
+            c_most = self.highest_energy_cluster()
+
             if self.hub == c_least:
-                _, c_in = closest_nodes([c_most.anchor], c_most)
+                _, c_in = closest_nodes(self.hub, c_most)
 
                 c_most.remove(c_in)
                 self.hub.add(c_in)
 
                 # emulate a do ... while loop
-                stdev_new = np.std(
-                    [self.total_cluster_energy(c) for c in all_clusters])
-                r += 1
+                self.update_anchors()
+                new_balance = self.energy_balance()
                 logging.info("Completed %d rounds of 2b", r)
 
                 # if this round didn't reduce stdev, then revert the changes
                 # and exit the loop
-                if stdev_new >= stdev:
+                if new_balance >= balance:
                     self.hub.remove(c_in)
                     c_most.add(c_in)
                     break
 
             elif self.hub == c_most:
                 # shrink c_most
-                c_out, _ = closest_nodes(self.hub, [c_least.anchor])
+                c_out, _ = closest_nodes(self.hub, c_least)
 
                 self.hub.remove(c_out)
                 c_least.add(c_out)
 
-                # emulate a do ... while loop
-                stdev_new = np.std(
-                    [self.total_cluster_energy(c) for c in all_clusters])
-                r += 1
+                self.update_anchors()
+                new_balance = self.energy_balance()
                 logging.info("Completed %d rounds of 2b", r)
 
-                # if this round didn't reduce stdev, then revert the changes
-                # and exit the loop
-                if stdev_new >= stdev:
+                # if this round didn't reduce the energy balance, then revert
+                # the changes and exit the loop.
+                if new_balance >= balance:
                     c_least.remove(c_out)
                     self.hub.add(c_out)
                     break
 
             else:
-                # grow c_least
-                c_out, _ = closest_nodes(self.hub, [c_least.anchor])
-                self.hub.remove(c_out)
-                c_least.add(c_out)
-
                 # shrink c_most
-                _, c_in = closest_nodes([c_most.anchor], c_most)
+                _, c_in = closest_nodes(self.hub, c_most)
                 c_most.remove(c_in)
                 self.hub.add(c_in)
 
+                # grow c_least
+                c_out, _ = closest_nodes(self.hub, c_least)
+                self.hub.remove(c_out)
+                c_least.add(c_out)
+
                 # emulate a do ... while loop
-                stdev_new = np.std(
-                    [self.total_cluster_energy(c) for c in all_clusters])
-                r += 1
+                self.update_anchors()
+                new_balance = self.energy_balance()
                 logging.info("Completed %d rounds of 2b", r)
 
                 # if this round didn't reduce stdev, then revert the changes
                 # and exit the loop
-                if stdev_new >= stdev:
+                if new_balance >= balance:
                     c_least.remove(c_out)
                     self.hub.add(c_out)
 
@@ -543,7 +569,9 @@ class Flower(object):
             self.handle_large_ec()
 
         else:
+            logging.info("Handling standard case")
             self.greedy_expansion()
+            logging.info("Greedy complete. Starting optimization.")
             self.optimization()
 
             # Check for special cases (Em >> Ec or Ec >> Em)
@@ -571,8 +599,8 @@ def main():
     env = environment.Environment()
     # env.grid_height = 20000. * pq.meter
     # env.grid_width = 20000. * pq.meter
-    seed = int(time.time())
-    # seed = 1480824633
+    # seed = int(time.time())
+    seed = 1483415070
     logging.debug("Random seed is %s", seed)
     np.random.seed(seed)
     locs = np.random.rand(env.segment_count, 2) * env.grid_height

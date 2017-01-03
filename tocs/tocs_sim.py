@@ -7,6 +7,7 @@ import numpy as np
 import quantities as pq
 from matplotlib import path as mp
 
+import tocs.cluster
 from core import cluster, segment, linalg, environment
 from core.comparisons import much_greater_than
 from tocs.cluster import ToCSCluster, ToCSCentroid
@@ -85,8 +86,8 @@ class ToCS(object):
             self.clusters.append(clust)
 
         while len(self.clusters) >= self.env.mdc_count:
-            self.clusters = cluster.combine_clusters(self.clusters,
-                                                     self.centroid)
+            self.clusters = tocs.cluster.combine_clusters(self.clusters,
+                                                          self.centroid)
 
     def find_initial_rendezvous_points(self):
         """

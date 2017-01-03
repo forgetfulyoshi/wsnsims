@@ -1,15 +1,14 @@
 import logging
 
+import itertools
+
 from core import params, _tour, data
 from core.cluster import BaseCluster, closest_nodes
 
 
 class FlowerCluster(BaseCluster):
-    def __init__(self, central_cluster):
+    def __init__(self):
         super(FlowerCluster, self).__init__()
-
-        self.central_cluster = central_cluster
-        self.central_cluster.register(self)
 
         self.completed = False
         self.recent = None
@@ -34,15 +33,14 @@ class FlowerCluster(BaseCluster):
 
     @property
     def segments(self):
+        cluster_segments = list()
         for cell in self.cells:
-            for seg in cell.segments:
-                yield seg
+            cluster_segments.extend(cell.segments)
+
+        return cluster_segments
 
     @property
     def anchor(self):
-        if not self.relay_node:
-            self.update_anchor()
-
         return self.relay_node
 
     @anchor.setter
@@ -80,27 +78,8 @@ class FlowerCluster(BaseCluster):
     #     self._tour = _tour.find_tour(cells, radius=0)
     #     self._tour_length = _tour.tour_length(self._tour)
 
-    def update_anchor(self):
-        # First, remove any cells that don't have our cluster id
-        # new_cells = [c for c in self.cells if c.cluster_id == self.cluster_id]
-        # if not new_cells:
-        #     return
-
-        if not self.cells:
-            self.anchor = None
-            return
-
-        # Now, find the closest cell in the central cluster, and add it to ourselves
-        _, anchor = closest_nodes(self, self.central_cluster)
-        assert anchor
-        # new_cells.append(anchor)
-        # self.cells = new_cells
-
-        # self.central_cluster.anchors[self] = anchor
-        self.anchor = anchor
-
     def merge(self, other, *args, **kwargs):
-        c = super(FlowerCluster, self).merge(other, self.central_cluster)
+        c = super(FlowerCluster, self).merge(other)
         return c
 
     def data_volume_mbits(self, all_clusters, all_cells):
@@ -134,8 +113,8 @@ class FlowerCluster(BaseCluster):
 
 
 class FlowerVirtualCluster(FlowerCluster):
-    def __init__(self, central_cluster):
-        super(FlowerVirtualCluster, self).__init__(central_cluster)
+    def __init__(self):
+        super(FlowerVirtualCluster, self).__init__()
 
     def __str__(self):
         return "Flower Virtual Cluster {}".format(self.cluster_id)
@@ -196,8 +175,7 @@ class FlowerVirtualCluster(FlowerCluster):
 
 class FlowerHub(FlowerCluster):
     def __init__(self):
-        self._client_clusters = list()
-        super(FlowerHub, self).__init__(self)
+        super(FlowerHub, self).__init__()
         # self.anchors = {}
 
     # def calculate_tour(self):
@@ -206,29 +184,32 @@ class FlowerHub(FlowerCluster):
     #     self._tour = _tour.find_tour(cells, radius=0)
     #     self._tour_length = _tour.tour_length(self._tour)
 
-    def update_anchors(self):
-        for clust in self._client_clusters:
-            clust.update_anchor()
-
-    def add(self, cell):
-        super(FlowerHub, self).add(cell)
-        self.update_anchors()
-
-    def remove(self, cell):
-        super(FlowerHub, self).remove(cell)
-        self.update_anchors()
-
     def __str__(self):
         return "Flower Hub Cluster"
 
     def __repr__(self):
         return "FH"
 
-    def register(self, client_cluster):
-        if client_cluster == self:
-            return
+    def add(self, node):
+        """
 
-        self._client_clusters.append(client_cluster)
+        :param node:
+        :type node: core.segment.Segment
+        :return:
+        """
+        if node not in self.nodes:
+            logging.debug("Adding %s to %s", node, self)
+            node.virtual_cluster_id = self.cluster_id
+            self.nodes.append(node)
+            self._invalidate_cache()
+        else:
+            logging.warning("Re-added %s to %s", node, self)
+
+    def remove(self, node):
+        logging.debug("Removing %s from %s", node, self)
+        self.nodes.remove(node)
+        node.virtual_cluster_id = -1
+        self._invalidate_cache()
 
     def data_volume_mbits(self, all_clusters, all_cells):
         if not self.cells:
@@ -283,7 +264,7 @@ class FlowerHub(FlowerCluster):
 
 class FlowerVirtualHub(FlowerVirtualCluster):
     def __init__(self):
-        super(FlowerVirtualHub, self).__init__(self)
+        super(FlowerVirtualHub, self).__init__()
 
     def calculate_tour(self):
         cells = list(self.cells)
@@ -302,3 +283,37 @@ class FlowerVirtualHub(FlowerVirtualCluster):
 
     def register(self, client_cluster):
         pass
+
+
+def _merge_clusters(clusters, centroid):
+    index = 0
+    decorated = list()
+
+    cluster_pairs = itertools.combinations(clusters, 2)
+    for c_i, c_j in cluster_pairs:
+        tc_1 = c_i.merge(c_j).merge(centroid)
+        tc_2 = c_i.merge(centroid)
+
+        combination_cost = tc_1.tour_length - tc_2.tour_length
+        decorated.append((combination_cost, index, c_i, c_j))
+        index += 1
+
+    cost, _, c_i, c_j = min(decorated)
+    logging.info("Combining %s and %s (Cost: %f)", c_i, c_j, cost)
+
+    new_clusters = list(clusters)
+    new_cluster = c_i.merge(c_j)
+
+    new_clusters.remove(c_i)
+    new_clusters.remove(c_j)
+    new_clusters.append(new_cluster)
+    return new_clusters, new_cluster
+
+
+def combine_virtual_clusters(clusters, centroid):
+    new_clusters, new_cluster = _merge_clusters(clusters, centroid)
+
+    for node in new_cluster.nodes:
+        node.virtual_cluster_id = new_cluster.cluster_id
+
+    return new_clusters
