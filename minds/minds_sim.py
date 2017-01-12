@@ -255,11 +255,11 @@ def main():
     env = environment.Environment()
     # env.grid_height = 20000. * pq.meter
     # env.grid_width = 20000. * pq.meter
-    env.segment_count = 6
-    env.mdc_count = 3
-    # seed = int(time.time())
+    # env.segment_count = 6
+    # env.mdc_count = 3
+    seed = int(time.time())
     # seed = 1483675991
-    seed = 1483676009  # center has in-degree of 3
+    # seed = 1483676009  # center has in-degree of 3
     # seed = 1483998718  # center has in-degree of 2
     logging.debug("Random seed is %s", seed)
     np.random.seed(seed)
