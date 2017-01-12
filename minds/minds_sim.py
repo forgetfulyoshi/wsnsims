@@ -9,6 +9,7 @@ import scipy.sparse.csgraph as sp
 from scipy.sparse import csr_matrix
 
 from core import segment, environment, cluster
+from minds import minds_runner
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -230,29 +231,35 @@ class MINDS(object):
             central_segment = segment_ids[center]
 
             first_cluster = self.build_cluster(first_segments, central_segment)
-            second_cluster = self.build_cluster(second_segments, central_segment)
+            second_cluster = self.build_cluster(second_segments,
+                                                central_segment)
 
             self.clusters.remove(longest_cluster)
             self.clusters.append(first_cluster)
             self.clusters.append(second_cluster)
 
-            self.show_state()
-
         return self
 
     def run(self):
         sim = self.compute_paths()
+        runner = minds_runner.MINDSRunner(sim)
+        # runner.print_all_distances()
+        print("Maximum comms delay: {}".format(
+            runner.maximum_communication_delay()))
+        print("Energy balance: {}".format(runner.energy_balance()))
+        print("Average energy: {}".format(runner.average_energy()))
+        print("Max buffer size: {}".format(runner.max_buffer_size()))
 
 
 def main():
     env = environment.Environment()
     # env.grid_height = 20000. * pq.meter
     # env.grid_width = 20000. * pq.meter
-    # env.segment_count = 20
-    # env.mdc_count = 8
-    seed = int(time.time())
+    env.segment_count = 6
+    env.mdc_count = 3
+    # seed = int(time.time())
     # seed = 1483675991
-    # seed = 1483676009  # center has in-degree of 3
+    seed = 1483676009  # center has in-degree of 3
     # seed = 1483998718  # center has in-degree of 2
     logging.debug("Random seed is %s", seed)
     np.random.seed(seed)
