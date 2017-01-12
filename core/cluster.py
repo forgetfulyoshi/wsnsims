@@ -49,6 +49,11 @@ class BaseCluster(object):
         self._location = None
         self._tour = None
 
+    def __str__(self):
+        return "Cluster {}".format(self.cluster_id)
+
+
+
     @property
     def cluster_id(self):
         return self._cluster_id
