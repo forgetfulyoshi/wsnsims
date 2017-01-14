@@ -7,7 +7,7 @@ from collections import defaultdict
 from core import data, point
 from core.results import Results
 
-# logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
 
 # (cell, arrive_time, leave_time, upload, download)
 Timestamp = collections.namedtuple('Timestamp', ['cell', 'arrive', 'leave', 'upload', 'download', 'distance'])
@@ -63,7 +63,7 @@ def trip(src, dst, sim):
                     trip(src_cluster.anchor, dst_cluster.anchor, sim) +
                     trip(dst_cluster.anchor, dst, sim))
 
-    # logging.debug("Distance from %r to %r is %f", src, dst, distance)
+    # logger.debug("Distance from %r to %r is %f", src, dst, distance)
     return distance
 
 
@@ -508,23 +508,23 @@ def compute_timestamps(sim, rounds=1):
 def run_sim(simulation_data):
     # timestamps = compute_timestamps(simulation_data, 1)
     # for k, v in timestamps.items():
-    #     logging.info(str(k) + '\n' + '\n'.join([str(ts) for ts in v]) + '\n')
+    #     logger.info(str(k) + '\n' + '\n'.join([str(ts) for ts in v]) + '\n')
 
     max_delay, mean = max_intersegment_comm_delay(simulation_data)
-    logging.info("Maximum delay is: %f", max_delay)
-    # logging.info("Average delay is: %f", mean)
+    logger.info("Maximum delay is: %f", max_delay)
+    # logger.info("Average delay is: %f", mean)
 
     energy_balance = mdc_energy_balance(simulation_data)
-    logging.info("Energy balance is: %f", energy_balance)
+    logger.info("Energy balance is: %f", energy_balance)
 
     # lifetime, _, _ = min(network_lifetime(simulation_data))
-    # logging.info("Network lifetime is: %f", lifetime)
+    # logger.info("Network lifetime is: %f", lifetime)
 
     average_energy = average_total_mdc_energy_consumption(simulation_data)
-    logging.info("Average MDC energy consumption: %f", average_energy)
+    logger.info("Average MDC energy consumption: %f", average_energy)
 
     # max_buffer_size = buffer_space_required(simulation_data)
-    # logging.info("Maximum buffer size: %f", max_buffer_size)
+    # logger.info("Maximum buffer size: %f", max_buffer_size)
 
     # results = Results(max_delay, energy_balance, lifetime, average_energy, max_buffer_size)
     results = Results(max_delay, energy_balance, 0, average_energy, 0)

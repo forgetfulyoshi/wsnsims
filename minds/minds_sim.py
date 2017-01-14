@@ -11,8 +11,7 @@ from scipy.sparse import csr_matrix
 from core import segment, environment, cluster
 from minds import minds_runner
 
-logging.basicConfig(level=logging.DEBUG)
-
+logger = logging.getLogger(__name__)
 
 class MINDS(object):
     def __init__(self, locs):
@@ -241,14 +240,19 @@ class MINDS(object):
         return self
 
     def run(self):
+        """
+
+        :return:
+        :rtype: minds.minds_runner.MINDSRunner
+        """
         sim = self.compute_paths()
         runner = minds_runner.MINDSRunner(sim)
-        # runner.print_all_distances()
-        print("Maximum comms delay: {}".format(
-            runner.maximum_communication_delay()))
-        print("Energy balance: {}".format(runner.energy_balance()))
-        print("Average energy: {}".format(runner.average_energy()))
-        print("Max buffer size: {}".format(runner.max_buffer_size()))
+        return runner
+        # print("Maximum comms delay: {}".format(
+        #     runner.maximum_communication_delay()))
+        # print("Energy balance: {}".format(runner.energy_balance()))
+        # print("Average energy: {}".format(runner.average_energy()))
+        # print("Max buffer size: {}".format(runner.max_buffer_size()))
 
 
 def main():
@@ -261,7 +265,7 @@ def main():
     # seed = 1483675991
     # seed = 1483676009  # center has in-degree of 3
     # seed = 1483998718  # center has in-degree of 2
-    logging.debug("Random seed is %s", seed)
+    logger.debug("Random seed is %s", seed)
     np.random.seed(seed)
     locs = np.random.rand(env.segment_count, 2) * env.grid_height
     sim = MINDS(locs)

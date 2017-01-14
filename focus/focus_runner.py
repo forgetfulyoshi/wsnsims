@@ -8,12 +8,6 @@ from core import data, environment
 from focus.energy import FOCUSEnergyModel
 from focus.movement import FOCUSMovementModel
 
-# logging.basicConfig(level=logging.DEBUG)
-
-Timestamp = collections.namedtuple('Timestamp',
-                                   ['segment', 'arrive', 'leave', 'upload',
-                                    'download', 'distance'])
-
 
 class FOCUSRunnerError(Exception):
     pass
@@ -24,7 +18,7 @@ class FOCUSRunner(object):
         """
 
         :param sim: The simulation after a run of MINDS
-        :type sim: minds.minds_sim.MINDS
+        :type sim: focus.focus_sim.FOCUS
         """
 
         #: The simulation volume
@@ -215,7 +209,7 @@ class FOCUSRunner(object):
         for current in self.sim.clusters:
             external_segments = [s for s in self.sim.segments if
                                  (s not in current.nodes) or (
-                                 s != current.relay_node)]
+                                     s != current.relay_node)]
 
             pairs = itertools.product(external_segments, current.nodes)
 

@@ -1,10 +1,10 @@
+import itertools
 import logging
 
-import itertools
+from core import _tour, data
+from core.cluster import BaseCluster
 
-from core import params, _tour, data
-from core.cluster import BaseCluster, closest_nodes
-
+logger = logging.getLogger(__name__)
 
 class FlowerCluster(BaseCluster):
     def __init__(self):
@@ -198,15 +198,15 @@ class FlowerHub(FlowerCluster):
         :return:
         """
         if node not in self.nodes:
-            logging.debug("Adding %s to %s", node, self)
+            logger.debug("Adding %s to %s", node, self)
             node.virtual_cluster_id = self.cluster_id
             self.nodes.append(node)
             self._invalidate_cache()
         else:
-            logging.warning("Re-added %s to %s", node, self)
+            logger.warning("Re-added %s to %s", node, self)
 
     def remove(self, node):
-        logging.debug("Removing %s from %s", node, self)
+        logger.debug("Removing %s from %s", node, self)
         self.nodes.remove(node)
         node.virtual_cluster_id = -1
         self._invalidate_cache()
@@ -299,7 +299,7 @@ def _merge_clusters(clusters, centroid):
         index += 1
 
     cost, _, c_i, c_j = min(decorated)
-    logging.info("Combining %s and %s (Cost: %f)", c_i, c_j, cost)
+    logger.info("Combining %s and %s (Cost: %f)", c_i, c_j, cost)
 
     new_clusters = list(clusters)
     new_cluster = c_i.merge(c_j)

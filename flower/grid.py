@@ -9,6 +9,7 @@ import quantities as pq
 from core import point
 from core import environment
 
+logger = logging.getLogger(__name__)
 
 class Grid(object):
     """ Define the simulation grid """
@@ -31,15 +32,15 @@ class Grid(object):
         self._layout_cells()
 
     def _layout_cells(self):
-        logging.info("Cell side length: %s", Cell.side_len)
-        logging.info("Original dimensions: %s x %s", self.width, self.height)
+        logger.info("Cell side length: %s", Cell.side_len)
+        logger.info("Original dimensions: %s x %s", self.width, self.height)
 
         # First, adjust the physical size of the grid to accommodate whole
         # cells. This keeps us from having partial cells in the simulation.
         self.width = np.round(self.width / Cell.side_len) * Cell.side_len
         self.height = np.round(self.height / Cell.side_len) * Cell.side_len
 
-        logging.info("Adjusted dimensions: %s x %s", self.width, self.height)
+        logger.info("Adjusted dimensions: %s x %s", self.width, self.height)
 
         # Now, calculate the number of cells per row and column. This also
         # makes the row and column counts unit-less.

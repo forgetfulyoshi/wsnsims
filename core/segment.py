@@ -1,5 +1,3 @@
-
-from core import params
 from core import point
 
 

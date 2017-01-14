@@ -1,20 +1,20 @@
 import logging
+import time
 import typing
 
-import time
 import matplotlib.pyplot as plt
 import numpy as np
 import quantities as pq
 from matplotlib import path as mp
 
 import tocs.cluster
-from core import cluster, segment, linalg, environment
+from core import segment, linalg, environment
+from core.cluster import RelayNode
 from core.comparisons import much_greater_than
 from tocs.cluster import ToCSCluster, ToCSCentroid
-from core.cluster import RelayNode
 from tocs.tocs_runner import ToCSRunner
 
-logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
 
 
 class ToCS(object):
@@ -109,16 +109,16 @@ class ToCS(object):
         :rtype: bool
         """
         average_length = self.average_tour_length()
-        logging.debug("Average tour length: %s", average_length)
+        logger.debug("Average tour length: %s", average_length)
         for clust in self.clusters:
-            logging.debug("%s tour length: %s", clust, clust.tour_length)
+            logger.debug("%s tour length: %s", clust, clust.tour_length)
 
             max_tour = clust.tour_length
             max_tour += np.linalg.norm(
                 clust.rendezvous_point.location.nd - self.center) * pq.meter
 
             if max_tour < average_length:
-                logging.info("Cannot optimize %s in this round", clust)
+                logger.info("Cannot optimize %s in this round", clust)
                 continue
 
             if much_greater_than(average_length, clust.tour_length,
@@ -366,7 +366,7 @@ class ToCS(object):
         # self.show_state()
         round_count = 1
         while self._unbalanced():
-            logging.info("Running optimization round %d", round_count)
+            logger.info("Running optimization round %d", round_count)
             round_count += 1
 
             average_length = self.average_tour_length()
@@ -410,21 +410,26 @@ class ToCS(object):
         self.create_clusters()
         # self.show_state()
         self.find_initial_rendezvous_points()
-        # logging.info("Average tour length: %s", self.average_tour_length())
+        # logger.info("Average tour length: %s", self.average_tour_length())
         # self.show_state()
         self.optimize_rendezvous_points()
         # self.show_state()
         return self
 
     def run(self):
+        """
+
+        :return:
+        :rtype: tocs.tocs_runner.ToCSRunner
+        """
         sim = self.compute_paths()
         runner = ToCSRunner(sim)
-        # runner.print_all_distances()
-        print("Maximum comms delay: {}".format(
-            runner.maximum_communication_delay()))
-        print("Energy balance: {}".format(runner.energy_balance()))
-        print("Average energy: {}".format(runner.average_energy()))
-        print("Max buffer size: {}".format(runner.max_buffer_size()))
+        return runner
+        # print("Maximum comms delay: {}".format(
+        #     runner.maximum_communication_delay()))
+        # print("Energy balance: {}".format(runner.energy_balance()))
+        # print("Average energy: {}".format(runner.average_energy()))
+        # print("Max buffer size: {}".format(runner.max_buffer_size()))
 
 
 def main():
@@ -433,7 +438,7 @@ def main():
     # env.grid_width = 20000. * pq.meter
     seed = int(time.time())
     # seed = 1480203906
-    logging.debug("Random seed is %s", seed)
+    logger.debug("Random seed is %s", seed)
     np.random.seed(seed)
     locs = np.random.rand(env.segment_count, 2) * env.grid_height
     sim = ToCS(locs)

@@ -15,8 +15,7 @@ from core.segment import Segment
 from focus.cluster import FOCUSCluster
 from focus.focus_runner import FOCUSRunner
 
-logging.basicConfig(level=logging.DEBUG)
-
+logger = logging.getLogger(__name__)
 
 class FOCUS(object):
     def __init__(self, locs):
@@ -190,13 +189,19 @@ class FOCUS(object):
         return self
 
     def run(self):
+        """
+
+        :return:
+        :rtype: focus.focus_runner.FOCUSRunner
+        """
         sim = self.compute_paths()
         runner = FOCUSRunner(sim)
-        print("Maximum comms delay: {}".format(
-            runner.maximum_communication_delay()))
-        print("Energy balance: {}".format(runner.energy_balance()))
-        print("Average energy: {}".format(runner.average_energy()))
-        print("Max buffer size: {}".format(runner.max_buffer_size()))
+        return runner
+        # print("Maximum comms delay: {}".format(
+        #     runner.maximum_communication_delay()))
+        # print("Energy balance: {}".format(runner.energy_balance()))
+        # print("Average energy: {}".format(runner.average_energy()))
+        # print("Max buffer size: {}".format(runner.max_buffer_size()))
 
 
 def main():
@@ -205,7 +210,7 @@ def main():
     # env.mdc_count = 3
     seed = int(time.time())
     # seed = 1484365941
-    logging.debug("Random seed is %s", seed)
+    logger.debug("Random seed is %s", seed)
     np.random.seed(seed)
     locs = np.random.rand(env.segment_count, 2) * env.grid_height
     sim = FOCUS(locs)

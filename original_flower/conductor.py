@@ -1,21 +1,20 @@
 import csv
-import itertools
-import logging
-import math
-import statistics
-import multiprocessing
-import time
 import datetime
-from collections import namedtuple
+import logging
+import multiprocessing
 import os
+import statistics
+import time
+from collections import namedtuple
 
 from original_flower import params
+from original_flower import sim_inputs
 from original_flower.flower_sim import FlowerSim
 from original_flower.results import Results
 from original_flower.tocs_sim import ToCS
-from original_flower import sim_inputs
 
 logging.basicConfig(level=logging.ERROR)
+logger = logging.getLogger(__name__)
 
 RUNS = 30
 
@@ -79,14 +78,14 @@ def run(parameters):
                 try:
                     tocs_results.append(result.get(timeout=100))
                 except Exception:
-                    logging.exception('ToCS Exception')
+                    logger.exception('ToCS Exception')
                     continue
 
             for result in flower_workers:
                 try:
                     flower_results.append(result.get(timeout=100))
                 except Exception:
-                    logging.exception('FLOWER Exception')
+                    logger.exception('FLOWER Exception')
                     continue
 
     mean_tocs_results = average_results(tocs_results[:RUNS])

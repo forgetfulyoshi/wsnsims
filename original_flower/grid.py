@@ -7,6 +7,7 @@ import math
 from original_flower import point, params
 from original_flower.point import WorldPositionMixin
 
+logger = logging.getLogger(__name__)
 
 class GridPositionMixin(object):
     """Describes a position on the grid"""
@@ -59,8 +60,8 @@ class Grid(object):
         self._layout_cells()
 
     def _layout_cells(self):
-        logging.info("Cell side length: %s", Cell.side_len)
-        logging.info("Original dimensions: %s x %s", self.width, self.hieght)
+        logger.info("Cell side length: %s", Cell.side_len)
+        logger.info("Original dimensions: %s x %s", self.width, self.hieght)
 
         #
         # First, adjust the physical size of the grid to accomodate whole
@@ -69,7 +70,7 @@ class Grid(object):
         self.width = round(self.width / Cell.side_len) * Cell.side_len
         self.hieght = round(self.hieght / Cell.side_len) * Cell.side_len
 
-        logging.info("Adjusted dimensions: %s x %s", self.width, self.hieght)
+        logger.info("Adjusted dimensions: %s x %s", self.width, self.hieght)
 
         #
         # Now, calculate the number of cells per row and column

@@ -7,6 +7,7 @@ import scipy.sparse.csgraph as sp
 import core.environment
 import core.data
 
+logger = logging.getLogger(__name__)
 
 class FOCUSEnergyModelError(Exception):
     pass
@@ -73,7 +74,7 @@ class FOCUSEnergyModel(object):
         parent_time = parent.tour_length / parent.mdc_speed
         child_speed = child.tour_length / parent_time
         child.mdc_speed = child_speed
-        logging.debug("Set %s speed to %s", child, child.mdc_speed)
+        logger.debug("Set %s speed to %s", child, child.mdc_speed)
 
     def _cluster_data_volume(self, cluster_id):
         """

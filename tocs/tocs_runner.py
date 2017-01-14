@@ -13,8 +13,6 @@ from core.results import Results
 from tocs.energy import ToCSEnergyModel
 from tocs.movement import ToCSMovementModel
 
-# logging.basicConfig(level=logging.DEBUG)
-
 Timestamp = collections.namedtuple('Timestamp',
                                    ['segment', 'arrive', 'leave', 'upload',
                                     'download', 'distance'])
@@ -224,7 +222,6 @@ class ToCSRunner(object):
 
         data_volumes = list()
         for current in self.sim.clusters + [self.sim.centroid]:
-
             external_segments = [s for s in self.sim.segments if
                                  s.cluster_id != current.cluster_id]
 

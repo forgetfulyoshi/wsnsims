@@ -7,6 +7,7 @@ import quantities as pq
 from core import tour, environment, linalg, point
 from core.orderedset import OrderedSet
 
+logger = logging.getLogger(__name__)
 
 class CoreClusterError(Exception):
     pass
@@ -68,7 +69,7 @@ class BaseCluster(object):
 
     @relay_node.setter
     def relay_node(self, value):
-        logging.debug("Setting %s RN to %s", self, value)
+        logger.debug("Setting %s RN to %s", self, value)
         self._relay_node = value
         self._invalidate_cache()
 
@@ -129,15 +130,15 @@ class BaseCluster(object):
         :return:
         """
         if node not in self.nodes:
-            logging.debug("Adding %s to %s", node, self)
+            logger.debug("Adding %s to %s", node, self)
             node.cluster_id = self.cluster_id
             self.nodes.append(node)
             self._invalidate_cache()
         else:
-            logging.warning("Re-added %s to %s", node, self)
+            logger.warning("Re-added %s to %s", node, self)
 
     def remove(self, node):
-        logging.debug("Removing %s from %s", node, self)
+        logger.debug("Removing %s from %s", node, self)
         self.nodes.remove(node)
         node.cluster_id = -1
         self._invalidate_cache()

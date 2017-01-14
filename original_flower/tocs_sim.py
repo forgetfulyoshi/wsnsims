@@ -11,8 +11,7 @@ from original_flower import point
 from original_flower import segment
 from original_flower import tocs_runner
 
-# logging.basicConfig(level=logging.DEBUG)
-
+logger = logging.getLogger(__name__)
 
 MAX_ROUNDS = 100
 
@@ -86,7 +85,7 @@ class ToCS(object):
             clusters.append(c)
 
         while len(clusters) >= params.MDC_COUNT:
-            logging.info("Current Clusters: %r", clusters)
+            logger.info("Current Clusters: %r", clusters)
             clusters = cluster.combine_clusters(clusters, self.centroid)
             [c.calculate_tour() for c in clusters]
 
@@ -135,7 +134,7 @@ class ToCS(object):
             long_clusters = [c for c in self.clusters if c.tour_length > atl + 500.0]
             short_clusters = [c for c in self.clusters if c.tour_length < atl - 500.0]
             if not long_clusters or short_clusters:
-                logging.info("All clusters optimized")
+                logger.info("All clusters optimized")
                 break
 
             if rounds > MAX_ROUNDS:
@@ -146,11 +145,11 @@ class ToCS(object):
                     rounds += 1
 
                     # Move the rendezvous point closer to Ci
-                    logging.info("Moving rendezvous point for %r toward %r", c, c)
+                    logger.info("Moving rendezvous point for %r toward %r", c, c)
 
                     if rounds > MAX_ROUNDS:
                         # self.show_state()
-                        # logging.info(long_clusters)
+                        # logger.info(long_clusters)
                         break
 
                     max_length = c.distance(self.virtual_center_segment)
@@ -174,7 +173,7 @@ class ToCS(object):
                     closest, _ = cluster.closest_points(c_tour, [self.virtual_center_segment])
                     closest_index = c_tour.index(closest)
                     if point.direction(c_tour[(closest_index + 1) % len(c_tour)], closest, c.rendezvous_point) > 0:
-                        logging.info("Need to move %s into the centroid group!", c)
+                        logger.info("Need to move %s into the centroid group!", c)
 
                         # Move the segment to the centroid cluster
                         c.remove(closest)
@@ -219,7 +218,7 @@ class ToCS(object):
                     rounds += 1
 
                     # Move the rendezvous point closer to the centroid
-                    logging.info("Moving rendezvous point for %r toward %r", c, self.centroid)
+                    logger.info("Moving rendezvous point for %r toward %r", c, self.centroid)
 
                     if rounds > 100:
                         # self.show_state()
@@ -255,7 +254,7 @@ class ToCS(object):
         self.create_clusters()
         # sim.show_state()
         self.find_initial_rendezvous_points()
-        # logging.info("Average tour length: %f", self.average_tour_length())
+        # logger.info("Average tour length: %f", self.average_tour_length())
         # self.show_state()
         self.optimize_rendezvous_points()
         # self.show_state()

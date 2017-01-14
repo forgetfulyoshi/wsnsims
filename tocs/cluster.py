@@ -5,6 +5,7 @@ import quantities as pq
 
 from core.cluster import BaseCluster
 
+logger = logging.getLogger(__name__)
 
 class ToCSCluster(BaseCluster):
     def __init__(self):
@@ -105,7 +106,7 @@ def combine_clusters(clusters, centroid):
         index += 1
 
     cost, _, c_i, c_j = min(decorated)
-    logging.info("Combining %s and %s (Cost: %f)", c_i, c_j, cost)
+    logger.info("Combining %s and %s (Cost: %f)", c_i, c_j, cost)
 
     new_clusters = list(clusters)
     new_cluster = c_i.merge(c_j)

@@ -6,6 +6,8 @@ import matplotlib.pyplot as plt
 
 from core import point
 
+logger = logging.getLogger(__name__)
+
 
 class TourError(Exception):
     pass
@@ -141,7 +143,7 @@ def gt_two_body_tour(cells, radius):
 
 
 def main():
-    logging.basicConfig(level=logging.DEBUG)
+    logging.basicConfig(level=logger.DEBUG)
 
     # s1 = point.Vec2(2, 8)
     # s2 = point.Vec2(10, 3)
@@ -149,7 +151,7 @@ def main():
     #
     # collection_points = two_body_tour(s1, s2, radius)
     # tl = tour_length(collection_points)
-    # logging.info("Tour length: %f", tl)
+    # logger.info("Tour length: %f", tl)
 
     t = list()
     for _ in range(5):
@@ -157,7 +159,7 @@ def main():
         t.append(v)
 
     tour = gt_two_body_tour(t, radius)
-    logging.info("Tour length: %f", tour_length(tour))
+    logger.info("Tour length: %f", tour_length(tour))
     plt.show()
 
 

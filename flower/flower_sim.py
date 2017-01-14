@@ -1,30 +1,25 @@
 """Main FLOWER simulation logic"""
 
 import logging
-import statistics
 import warnings
-import time
-
 from operator import itemgetter
 from typing import List
 
 import matplotlib.pyplot as plt
 import numpy as np
-import quantities as pq
 
-from flower.cluster import combine_virtual_clusters
-from core.cluster import closest_nodes
 from core import environment
 from core import segment
-from flower.cluster import FlowerVirtualCluster
+from core.cluster import closest_nodes
+from flower import grid
 from flower.cluster import FlowerCluster
 from flower.cluster import FlowerHub
+from flower.cluster import FlowerVirtualCluster
 from flower.cluster import FlowerVirtualHub
-from flower import flower_runner
-from flower import grid
+from flower.cluster import combine_virtual_clusters
 from flower.energy import FlowerEnergyModel
 
-logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
 warnings.filterwarnings('error')
 
 
@@ -158,7 +153,7 @@ class Flower(object):
             cell_cover.add(candidate)
 
         # Initialized!!
-        logging.info("Length of cover: %d", len(cell_cover))
+        logger.info("Length of cover: %d", len(cell_cover))
 
         assert self.env.mdc_count < len(cell_cover)
 
@@ -203,7 +198,7 @@ class Flower(object):
         # Combine the clusters until we have MDC_COUNT - 1 non-central, virtual
         # clusters
         while len(virtual_clusters) >= self.env.mdc_count:
-            logging.info("Current VCs: %r", virtual_clusters)
+            logger.info("Current VCs: %r", virtual_clusters)
             virtual_clusters = combine_virtual_clusters(virtual_clusters,
                                                         self.virtual_hub)
 
@@ -215,7 +210,7 @@ class Flower(object):
 
         for vc in virtual_clusters:
             for cell in vc.cells:
-                logging.info("%s is in %s", cell, vc)
+                logger.info("%s is in %s", cell, vc)
 
         self.virtual_clusters = virtual_clusters
 
@@ -242,7 +237,7 @@ class Flower(object):
         all_clusters = self.clusters + [self.hub]
 
         for r in range(101):
-            logging.debug("Starting round %d of Em >> Ec", r)
+            logger.debug("Starting round %d of Em >> Ec", r)
 
             if r > 100:
                 raise FlowerError("Optimization got lost")
@@ -250,7 +245,7 @@ class Flower(object):
             self.update_anchors()
 
             stdev = self.energy_balance()
-            logging.debug("Current energy balance is %f", stdev)
+            logger.debug("Current energy balance is %f", stdev)
 
             c_most = self.highest_energy_cluster()
 
@@ -270,7 +265,7 @@ class Flower(object):
 
             # emulate a do ... while loop
             stdev_new = self.energy_balance()
-            logging.info("Completed %d rounds of Ec >> Em", r + 1)
+            logger.info("Completed %d rounds of Ec >> Em", r + 1)
 
             # if this round didn't reduce stdev, then revert the changes and
             # exit the loop
@@ -317,7 +312,7 @@ class Flower(object):
             # as "completed"
             if not cells:
                 c_least.completed = True
-                logging.info("All cells assigned. Marking %s as completed",
+                logger.info("All cells assigned. Marking %s as completed",
                              c_least)
                 continue
 
@@ -348,7 +343,7 @@ class Flower(object):
                     # Just for proper bookkeeping, reset the virtual cell's ID
                     # to NOT_CLUSTERED
                     self.damaged.cluster_id = -1
-                    logging.info("ROUND %d: Moved %s to %s", r, self.hub,
+                    logger.info("ROUND %d: Moved %s to %s", r, self.hub,
                                  best_cell)
 
                 else:
@@ -365,7 +360,7 @@ class Flower(object):
                     # Add that cell to the hub cluster
                     self.hub.add(best_cell)
 
-                    logging.info("ROUND %d: Added %s to %s", r, best_cell,
+                    logger.info("ROUND %d: Added %s to %s", r, best_cell,
                                  self.hub)
 
                 # Set the cluster ID for the new cell, mark it as the most
@@ -424,13 +419,13 @@ class Flower(object):
                             break
 
                 if best_cell:
-                    logging.info("ROUND %d: Added %s to %s", r, best_cell,
+                    logger.info("ROUND %d: Added %s to %s", r, best_cell,
                                  c_least)
                     c_least.add(best_cell)
 
                 else:
                     c_least.completed = True
-                    logging.info(
+                    logger.info(
                         "ROUND %d: No best cell found. Marking %s completed",
                         r, c_least)
 
@@ -438,7 +433,7 @@ class Flower(object):
         virtual = c in self.virtual_clusters + [self.virtual_hub]
 
         energy = self.energy_model.total_energy(c.cluster_id, virtual)
-        logging.debug("%s requires %s to traverse.", c, energy)
+        logger.debug("%s requires %s to traverse.", c, energy)
         return energy
 
     def highest_energy_cluster(self):
@@ -473,7 +468,7 @@ class Flower(object):
 
         for r in range(101):
 
-            logging.debug("Starting round %d of optimization", r)
+            logger.debug("Starting round %d of optimization", r)
             self.show_state()
 
             if r > 100:
@@ -494,7 +489,7 @@ class Flower(object):
                 # emulate a do ... while loop
                 self.update_anchors()
                 new_balance = self.energy_balance()
-                logging.info("Completed %d rounds of 2b", r)
+                logger.info("Completed %d rounds of 2b", r)
 
                 # if this round didn't reduce stdev, then revert the changes
                 # and exit the loop
@@ -512,7 +507,7 @@ class Flower(object):
 
                 self.update_anchors()
                 new_balance = self.energy_balance()
-                logging.info("Completed %d rounds of 2b", r)
+                logger.info("Completed %d rounds of 2b", r)
 
                 # if this round didn't reduce the energy balance, then revert
                 # the changes and exit the loop.
@@ -535,7 +530,7 @@ class Flower(object):
                 # emulate a do ... while loop
                 self.update_anchors()
                 new_balance = self.energy_balance()
-                logging.info("Completed %d rounds of 2b", r)
+                logger.info("Completed %d rounds of 2b", r)
 
                 # if this round didn't reduce stdev, then revert the changes
                 # and exit the loop
@@ -555,23 +550,23 @@ class Flower(object):
         self.mech_energy = self.energy_model.total_sim_movement_energy(True)
         self.comms_energy = self.energy_model.total_sim_comms_energy(True)
 
-        logging.info("Initial mech energy: %s", self.mech_energy)
-        logging.info("Initial comms energy: %s", self.comms_energy)
+        logger.info("Initial mech energy: %s", self.mech_energy)
+        logger.info("Initial comms energy: %s", self.comms_energy)
 
         if much_greater_than(self.mech_energy, self.comms_energy):
-            logging.info("Handling special case Em >> Ec")
+            logger.info("Handling special case Em >> Ec")
             self.em_is_large = True
             self.handle_large_em()
 
         elif much_greater_than(self.comms_energy, self.mech_energy):
-            logging.info("Handling special case Ec >> Em")
+            logger.info("Handling special case Ec >> Em")
             self.ec_is_large = True
             self.handle_large_ec()
 
         else:
-            logging.info("Handling standard case")
+            logger.info("Handling standard case")
             self.greedy_expansion()
-            logging.info("Greedy complete. Starting optimization.")
+            logger.info("Greedy complete. Starting optimization.")
             self.optimization()
 
             # Check for special cases (Em >> Ec or Ec >> Em)
@@ -579,11 +574,11 @@ class Flower(object):
             # self.comms_energy = self.energy_model.total_sim_comms_energy(False)
             #
             # if much_greater_than(self.mech_energy, self.comms_energy):
-            #     logging.info("Need to conduct tour sharing (Em >> Ec)")
+            #     logger.info("Need to conduct tour sharing (Em >> Ec)")
             #     self.em_is_large = True
             #
             # elif much_greater_than(self.comms_energy, self.mech_energy):
-            #     logging.info("Need to conduct tour sharing (Ec >> Em)")
+            #     logger.info("Need to conduct tour sharing (Ec >> Em)")
             #     self.ec_is_large = True
 
         # self.show_state()
@@ -601,7 +596,7 @@ def main():
     # env.grid_width = 20000. * pq.meter
     # seed = int(time.time())
     seed = 1483415070
-    logging.debug("Random seed is %s", seed)
+    logger.debug("Random seed is %s", seed)
     np.random.seed(seed)
     locs = np.random.rand(env.segment_count, 2) * env.grid_height
     sim = Flower(locs)

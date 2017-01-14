@@ -8,8 +8,6 @@ from core import data, environment
 from minds.energy import MINDSEnergyModel
 from minds.movement import MINDSMovementModel
 
-# logging.basicConfig(level=logging.DEBUG)
-
 Timestamp = collections.namedtuple('Timestamp',
                                    ['segment', 'arrive', 'leave', 'upload',
                                     'download', 'distance'])
@@ -196,7 +194,8 @@ class MINDSRunner(object):
         data_volumes = list()
         for current in self.sim.clusters:
             external_segments = [s for s in self.sim.segments if
-                                 (s not in current.nodes) or (s != current.relay_node)]
+                                 (s not in current.nodes) or (
+                                 s != current.relay_node)]
 
             pairs = itertools.product(external_segments, current.nodes)
 

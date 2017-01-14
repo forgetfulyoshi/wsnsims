@@ -3,3 +3,4 @@ nose
 numpy
 quantities
 scipy
+pyclustering

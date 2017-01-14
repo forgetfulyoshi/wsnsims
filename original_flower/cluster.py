@@ -6,6 +6,7 @@ from original_flower import params
 from original_flower import tour
 from original_flower.point import WorldPositionMixin
 
+logger = logging.getLogger(__name__)
 
 class ClusterError(Exception):
     pass
@@ -54,19 +55,19 @@ class ClusterMixin(WorldPositionMixin):
 
     def add(self, node):
         if node not in self._nodes:
-            logging.debug("Adding %s to %s", node, self)
+            logger.debug("Adding %s to %s", node, self)
             self._nodes.append(node)
             self.update_location()
         else:
-            logging.warning("Re-added %s to %s", node, self)
+            logger.warning("Re-added %s to %s", node, self)
 
     def remove(self, node):
         # if node not in self._nodes:
-        #     logging.warning("Invalid attempt to remove %s from %s %s", node, self, self._nodes)
+        #     logger.warning("Invalid attempt to remove %s from %s %s", node, self, self._nodes)
         #     raise ClusterError()
         # else:
 
-        logging.debug("Removing %s from %s", node, self)
+        logger.debug("Removing %s from %s", node, self)
         self._nodes.remove(node)
         self.update_location()
 
@@ -152,11 +153,11 @@ class FlowerCluster(ClusterMixin):
 
     @recent.setter
     def recent(self, value):
-        logging.debug("Setting RC(%r) to %r", self, value)
+        logger.debug("Setting RC(%r) to %r", self, value)
         self._recent = value
 
         if value not in self.nodes:
-            logging.warning("%r is not a member of %r", value, self)
+            logger.warning("%r is not a member of %r", value, self)
 
     def calculate_tour(self):
         if not self.cells:
@@ -475,7 +476,7 @@ def combine_clusters(clusters, centroid):
         index += 1
 
     cost, _, c_i, c_j = min(decorated)
-    logging.info("Combining %s and %s (Cost: %f)", c_i, c_j, cost)
+    logger.info("Combining %s and %s (Cost: %f)", c_i, c_j, cost)
 
     new_clusters = list(clusters)
     new_cluster = c_i.combined(c_j)
