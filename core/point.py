@@ -6,10 +6,6 @@ from operator import methodcaller
 import numpy as np
 
 
-class Vec2Error(Exception):
-    pass
-
-
 class Vec2(object):
     def __init__(self, nd=None):
         if not isinstance(nd, np.ndarray):
@@ -94,76 +90,5 @@ class Vec2(object):
         return np.allclose(self.nd, other.nd)
 
 
-def closest_point(v, w, p):
-    """
-    Find the point closest to p on the line between v and w
-    Modified from StackOverflow at http://stackoverflow.com/a/1501725
-
-    Returns the distance and the point on the line segment between v and w
-    """
-    length = v.distance(w) ** 2
-    t = max(0, min(1, ((p - v) * (w - v)) / length))
-    projection = v + (w - v).scale(t)
-    return projection.distance(p), projection
 
 
-def direction(p0, p1, p2):
-    cp = (p2 - p0) ^ (p1 - p0)
-    return cp
-
-
-def sort_polar(points, field=None):
-    if not field:
-        lowest = min(points, key=attrgetter('y', 'x'))
-        # noinspection PyArgumentList
-        sorted_points = sorted(points,
-                               key=methodcaller('polar_angle', origin=lowest))
-
-
-
-    else:
-        lowest = min(points, key=attrgetter(field + '.y', field + '.x'))
-        decorated = [(getattr(p, field).polar_angle(
-            origin=getattr(lowest, field)), i, p) for i, p in
-                     enumerate(points)]
-        decorated.sort()
-        sorted_points = [p for _, _, p in decorated]
-
-    return sorted_points
-
-
-def rotate_to_start(points, new_start):
-    d = collections.deque(points)
-    start_index = points.index(new_start)
-    d.rotate(start_index * -1)
-    rotated_points = list(d)
-    return rotated_points
-
-
-def graham_scan(points):
-    my_points = list(points)
-
-    sorted_points = sort_polar(my_points)
-
-    hull = list()
-    hull.append(sorted_points[0])
-    hull.append(sorted_points[1])
-    hull.append(sorted_points[2])
-
-    for i in range(3, len(sorted_points)):
-        pi = sorted_points[i]
-
-        turn = direction(hull[-2:][0], hull[-1:][0], pi)
-        while turn > 0.0:
-            hull.pop()
-            turn = direction(hull[-2:][0], hull[-1:][0], pi)
-
-        hull.append(pi)
-
-    interior = list(set(sorted_points).difference(hull))
-    return hull, interior
-
-
-class WorldPositionMixin(Vec2):
-    def __init__(self, x=0.0, y=0.0):
-        super(WorldPositionMixin, self).__init__(x, y)

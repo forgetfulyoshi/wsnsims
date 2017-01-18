@@ -14,7 +14,7 @@ class MINDSEnergyModel(object):
         """
 
         :param clust:
-        :type simulation_data: tocs.tocs_sim.ToCS
+        :type simulation_data: tocs.tocs_sim.TOCS
         """
 
         self.sim = simulation_data

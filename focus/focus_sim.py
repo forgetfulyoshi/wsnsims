@@ -196,20 +196,24 @@ class FOCUS(object):
         """
         sim = self.compute_paths()
         runner = FOCUSRunner(sim)
+        logger.debug("Maximum comms delay: {}".format(
+            runner.maximum_communication_delay()))
+        logger.debug("Energy balance: {}".format(runner.energy_balance()))
+        logger.debug("Average energy: {}".format(runner.average_energy()))
+        logger.debug("Max buffer size: {}".format(runner.max_buffer_size()))
         return runner
-        # print("Maximum comms delay: {}".format(
-        #     runner.maximum_communication_delay()))
-        # print("Energy balance: {}".format(runner.energy_balance()))
-        # print("Average energy: {}".format(runner.average_energy()))
-        # print("Max buffer size: {}".format(runner.max_buffer_size()))
 
 
 def main():
     env = Environment()
     # env.segment_count = 20
     # env.mdc_count = 3
-    seed = int(time.time())
-    # seed = 1484365941
+    # seed = int(time.time())
+
+    seed = 1484764250
+    env.segment_count = 12
+    env.mdc_count = 5
+
     logger.debug("Random seed is %s", seed)
     np.random.seed(seed)
     locs = np.random.rand(env.segment_count, 2) * env.grid_height
@@ -218,4 +222,6 @@ def main():
 
 
 if __name__ == '__main__':
+    logging.basicConfig(level=logging.DEBUG)
+    logger = logging.getLogger('focus_sim')
     main()

@@ -4,12 +4,12 @@ import itertools
 import logging
 
 import numpy as np
-import quantities as pq
 
-from core import point
 from core import environment
+from flower.cell import Cell
 
 logger = logging.getLogger(__name__)
+
 
 class Grid(object):
     """ Define the simulation grid """
@@ -32,15 +32,15 @@ class Grid(object):
         self._layout_cells()
 
     def _layout_cells(self):
-        logger.info("Cell side length: %s", Cell.side_len)
-        logger.info("Original dimensions: %s x %s", self.width, self.height)
+        logger.debug("Cell side length: %s", Cell.side_len)
+        logger.debug("Original dimensions: %s x %s", self.width, self.height)
 
         # First, adjust the physical size of the grid to accommodate whole
         # cells. This keeps us from having partial cells in the simulation.
         self.width = np.round(self.width / Cell.side_len) * Cell.side_len
         self.height = np.round(self.height / Cell.side_len) * Cell.side_len
 
-        logger.info("Adjusted dimensions: %s x %s", self.width, self.height)
+        logger.debug("Adjusted dimensions: %s x %s", self.width, self.height)
 
         # Now, calculate the number of cells per row and column. This also
         # makes the row and column counts unit-less.
@@ -62,6 +62,25 @@ class Grid(object):
                 current_cell = self.cell(row, col)
                 current_cell.neighbors = self.cell_neighbors(current_cell)
                 current_cell.segments = self.cell_segments(current_cell)
+
+    def closest_cell(self, position):
+        """
+
+        :param position:
+        :type position: np.array
+        :return:
+        :rtype: Cell
+        """
+
+        closest_cell = None
+        closest_distance = np.inf
+        for cell in self.cells():
+            distance = np.linalg.norm(position - cell.location.nd.magnitude)
+            if distance < closest_distance:
+                closest_cell = cell
+                closest_distance = distance
+
+        return closest_cell
 
     def cells(self):
         """
@@ -141,64 +160,6 @@ class Grid(object):
 
     def center(self):
         return self.cell(self.rows // 2, self.cols // 2)
-
-
-class Cell(object):
-    """ Defines a cell in the grid """
-
-    count = 0
-    side_len = environment.Environment().comms_range / np.sqrt(2)
-
-    def __init__(self, row, column):
-        self.cell_id = Cell.count
-        Cell.count += 1
-
-        # Maintain the grid position.
-        self.grid_location = np.array([row, column])
-
-        # Calculate the physical location of the center of this cell.
-        x_pos = column * Cell.side_len + (Cell.side_len / 2.)
-        y_pos = row * Cell.side_len + (Cell.side_len / 2.)
-        self.location = point.Vec2(np.array([x_pos, y_pos]) * pq.meter)
-
-        # The segments within radio range of this cell.
-        self.segments = list()
-
-        # The (maximum eight) cells immediately adjacent to this cell.
-        self.neighbors = list()
-
-        # The number of segments within radio range of any neighbor cell
-        self.signal_hop_count = 0
-
-        # The cell distance between this cell and the centroid cell, G.
-        self.proximity = 0
-
-        # The numeric identifier of the virtual cluster this cell belongs to.
-        self.virtual_cluster_id = -1
-
-        # The numeric identifier of the cluster this cell belongs to.
-        self._cluster_id = -1
-
-    @property
-    def cluster_id(self):
-        return self._cluster_id
-
-    @cluster_id.setter
-    def cluster_id(self, value):
-        self._cluster_id = value
-
-    @property
-    def access(self):
-        """
-        The number of segments within radio range of this cell.
-        """
-        return len(self.segments)
-
-    def __str__(self):
-        return "Cell {}".format(self.cell_id)
-
-    def __repr__(self):
-        return "C {}".format(self.cell_id)
 
 
 def cell_distance(lhs, rhs):

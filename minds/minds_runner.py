@@ -1,5 +1,6 @@
 import collections
 import itertools
+import logging
 
 import numpy as np
 import quantities as pq
@@ -12,6 +13,7 @@ Timestamp = collections.namedtuple('Timestamp',
                                    ['segment', 'arrive', 'leave', 'upload',
                                     'download', 'distance'])
 
+logger = logging.getLogger(__name__)
 
 class MINDSRunnerError(Exception):
     pass
@@ -46,7 +48,7 @@ class MINDSRunner(object):
             msg = "{} to {} is {}".format(
                 begin, end, self.movement_model.shortest_distance(begin, end))
 
-            print(msg)
+            logger.debug(msg)
 
         self.sim.show_state()
 

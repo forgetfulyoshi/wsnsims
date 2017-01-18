@@ -174,6 +174,7 @@ class MINDS(object):
         branches = self.group_branches(mst, center)
 
         if len(branches) == 1:
+            self.show_state()
             raise NotImplementedError("This case should not occur")
 
         if len(branches) == 2:
@@ -247,12 +248,12 @@ class MINDS(object):
         """
         sim = self.compute_paths()
         runner = minds_runner.MINDSRunner(sim)
+        logger.debug("Maximum comms delay: {}".format(
+            runner.maximum_communication_delay()))
+        logger.debug("Energy balance: {}".format(runner.energy_balance()))
+        logger.debug("Average energy: {}".format(runner.average_energy()))
+        logger.debug("Max buffer size: {}".format(runner.max_buffer_size()))
         return runner
-        # print("Maximum comms delay: {}".format(
-        #     runner.maximum_communication_delay()))
-        # print("Energy balance: {}".format(runner.energy_balance()))
-        # print("Average energy: {}".format(runner.average_energy()))
-        # print("Max buffer size: {}".format(runner.max_buffer_size()))
 
 
 def main():
@@ -265,12 +266,20 @@ def main():
     # seed = 1483675991
     # seed = 1483676009  # center has in-degree of 3
     # seed = 1483998718  # center has in-degree of 2
+
+    seed = 1484764250
+    env.segment_count = 12
+    env.mdc_count = 5
+
     logger.debug("Random seed is %s", seed)
     np.random.seed(seed)
     locs = np.random.rand(env.segment_count, 2) * env.grid_height
     sim = MINDS(locs)
     sim.run()
+    sim.show_state()
 
 
 if __name__ == '__main__':
+    logging.basicConfig(level=logging.DEBUG)
+    logger = logging.getLogger('minds_sim')
     main()

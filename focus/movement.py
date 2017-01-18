@@ -100,7 +100,7 @@ class FOCUSMovementModel(object):
                                           return_predecessors=True)
         # assert not np.any(np.isinf(distance_mat))
         if np.any(np.isinf(distance_mat)):
-            print("Found inf distance!!")
+            logger.debug("Found inf distance!!")
 
         return distance_mat, preds
 

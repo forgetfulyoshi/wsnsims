@@ -9,9 +9,6 @@ from core.orderedset import OrderedSet
 
 logger = logging.getLogger(__name__)
 
-class CoreClusterError(Exception):
-    pass
-
 
 class BaseCluster(object):
     count = 0
@@ -52,8 +49,6 @@ class BaseCluster(object):
 
     def __str__(self):
         return "Cluster {}".format(self.cluster_id)
-
-
 
     @property
     def cluster_id(self):
@@ -173,24 +168,3 @@ def closest_nodes(cluster_1, cluster_2, dist=None):
     closest = min(decorated)
     cells = closest[2], closest[3]
     return cells
-
-
-def closest_points(points_1, points_2):
-    pairs = itertools.product(points_1, points_2)
-    decorated = [(point_1.distance(point_2), i, point_1, point_2) for
-                 i, (point_1, point_2) in enumerate(pairs)]
-    closest = min(decorated)
-    points = closest[2], closest[3]
-    return points
-
-
-class RelayNode(object):
-    def __init__(self, position):
-        self.location = point.Vec2(position)
-        self.cluster_id = -1
-
-    def __str__(self):
-        return "RelayNode {}".format(self.location)
-
-    def __repr__(self):
-        return "RN{}".format(self.location)

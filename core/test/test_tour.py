@@ -1,13 +1,14 @@
 import unittest
 
 import numpy as np
+import quantities as pq
 
 from core import tour
 
 
 class TourTests(unittest.TestCase):
     def test_tour(self):
-        points = np.random.rand(10, 2)
+        points = np.random.rand(10, 2) * pq.meter
         route = tour.compute_tour(points)
 
         np.testing.assert_array_equal(points, route.points)
@@ -29,7 +30,7 @@ class TourTests(unittest.TestCase):
         self.assertAlmostEqual(0., route.length)
 
     def test_few_points(self):
-        points = np.random.random((1, 2))
+        points = np.random.random((1, 2)) * pq.meter
         route = tour.compute_tour(points)
 
         np.testing.assert_array_equal(route.points, points)
@@ -37,7 +38,7 @@ class TourTests(unittest.TestCase):
         np.testing.assert_array_equal(np.array([0]), route.vertices)
         self.assertAlmostEqual(0., route.length)
 
-        points = np.random.random((2, 2))
+        points = np.random.random((2, 2)) * pq.meter
         route = tour.compute_tour(points)
 
         np.testing.assert_array_equal(route.points, points)
@@ -47,8 +48,8 @@ class TourTests(unittest.TestCase):
                                route.length)
 
     def test_collection_points(self):
-        points = np.random.rand(10, 2)
-        route = tour.compute_tour(points, radio_range=.05)
+        points = np.random.rand(10, 2) * pq.meter
+        route = tour.compute_tour(points, radio_range=.05 * pq.meter)
 
         self.assertEqual(len(route.points), len(route.collection_points))
 
@@ -62,8 +63,8 @@ class TourTests(unittest.TestCase):
         # plt.show()
 
     def test_collection_points_zero_radio_range(self):
-        points = np.random.rand(30, 2)
-        route = tour.compute_tour(points, radio_range=0.)
+        points = np.random.rand(30, 2) * pq.meter
+        route = tour.compute_tour(points, radio_range=0. * pq.meter)
 
         np.testing.assert_array_equal(points, route.points)
         np.testing.assert_array_equal(route.points, route.collection_points)
@@ -81,14 +82,14 @@ class TourTests(unittest.TestCase):
         points = np.array([[0., 0.],
                            [1., 0.],
                            [0., 1.],
-                           [1., 1.]])
+                           [1., 1.]]) * pq.meter
 
         route = tour.compute_tour(points)
         self.assertAlmostEqual(4., route.length)
 
     def test_two_point_tour_length(self):
         points = np.array([[0., 0.],
-                           [1., 0.]])
+                           [1., 0.]]) * pq.meter
 
         route = tour.compute_tour(points)
         self.assertAlmostEqual(2., route.length)

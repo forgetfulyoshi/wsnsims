@@ -84,29 +84,28 @@ class FOCUSEnergyModel(object):
         :rtype: pq.bit
         """
 
-        current_cluster = self._find_cluster(cluster_id)
+        cluster = self._find_cluster(cluster_id)
 
-        # Handle all intra-cluster volume
-        cluster_segs = current_cluster.nodes
+        if not cluster.nodes:
+            return 0 * pq.bit
 
+        # Handle all intra-cluster data
+        cluster_segs = cluster.nodes
         intracluster_seg_pairs = [(src, dst) for src in cluster_segs for dst in
                                   cluster_segs if src != dst]
-
         data_vol = np.sum([core.data.volume(src, dst) for src, dst in
                            intracluster_seg_pairs]) * pq.bit
 
-        # Handle inter-cluster volume at the rendezvous point
-        other_segs = list(self.sim.segments)
-        for seg in current_cluster.nodes:
-            other_segs.remove(seg)
-
+        # Handle inter-cluster data at the rendezvous point
+        all_segments = self.sim.segments
+        other_segs = [c for c in all_segments if
+                      c.cluster_id != cluster.cluster_id]
         intercluster_seg_pairs = [(src, dst) for src in cluster_segs for dst in
-                                  other_segs if src != dst]
-
+                                  other_segs]
         intercluster_seg_pairs += [(src, dst) for src in other_segs for dst in
-                                   cluster_segs if src != dst]
+                                   cluster_segs]
 
-        # volume volume for inter-cluster traffic
+        # data volume for inter-cluster traffic
         data_vol += np.sum([core.data.volume(src, dst) for src, dst in
                             intercluster_seg_pairs]) * pq.bit
 

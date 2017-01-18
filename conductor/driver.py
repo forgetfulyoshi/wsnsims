@@ -10,14 +10,12 @@ import numpy as np
 import quantities as pq
 
 from conductor import sim_inputs
-from core import params
 from core.environment import Environment
 from core.results import Results
-
+from flower.flower_sim import FLOWER
 from focus.focus_sim import FOCUS
 from minds.minds_sim import MINDS
-from original_flower.flower_sim import FlowerSim
-from tocs.tocs_sim import ToCS
+from tocs.tocs_sim import TOCS
 
 logging.basicConfig(level=logging.ERROR)
 logger = logging.getLogger(__name__)
@@ -41,16 +39,17 @@ def average_results(results):
     return result
 
 
-# print("Maximum comms delay: {}".format(
+# logger.debug("Maximum comms delay: {}".format(
 #     runner.maximum_communication_delay()))
-# print("Energy balance: {}".format(runner.energy_balance()))
-# print("Average energy: {}".format(runner.average_energy()))
-# print("Max buffer size: {}".format(runner.max_buffer_size()))
+# logger.debug("Energy balance: {}".format(runner.energy_balance()))
+# logger.debug("Average energy: {}".format(runner.average_energy()))
+# logger.debug("Max buffer size: {}".format(runner.max_buffer_size()))
 
 def run_tocs(parameters, locs):
-    tocs_sim = ToCS(locs)
-    print("Starting ToCS at {}".format(datetime.datetime.now().isoformat()))
-    print("Using {}".format(parameters))
+    tocs_sim = TOCS(locs)
+    logger.debug(
+        "Starting ToCS at {}".format(datetime.datetime.now().isoformat()))
+    logger.debug("Using {}".format(parameters))
     start = time.time()
     runner = tocs_sim.run()
 
@@ -60,25 +59,33 @@ def run_tocs(parameters, locs):
                       runner.average_energy(),
                       runner.max_buffer_size())
 
-    print("Finished ToCS in {} seconds".format(time.time() - start))
+    logger.debug("Finished ToCS in {} seconds".format(time.time() - start))
     return results
 
 
 def run_flower(parameters, locs):
-
-    flower_sim = FlowerSim(locs.magnitude)
-    print("Starting FLOWER at {}".format(datetime.datetime.now().isoformat()))
-    print("Using {}".format(parameters))
+    flower_sim = FLOWER(locs)
+    logger.debug(
+        "Starting FLOWER at {}".format(datetime.datetime.now().isoformat()))
+    logger.debug("Using {}".format(parameters))
     start = time.time()
-    results = flower_sim.run()
-    print("Finished FLOWER in {} seconds".format(time.time() - start))
+    runner = flower_sim.run()
+
+    results = Results(runner.maximum_communication_delay(),
+                      runner.energy_balance(),
+                      0.,
+                      runner.average_energy(),
+                      runner.max_buffer_size())
+
+    logger.debug("Finished FLOWER in {} seconds".format(time.time() - start))
     return results
 
 
 def run_minds(parameters, locs):
     minds_sim = MINDS(locs)
-    print("Starting MINDS at {}".format(datetime.datetime.now().isoformat()))
-    print("Using {}".format(parameters))
+    logger.debug(
+        "Starting MINDS at {}".format(datetime.datetime.now().isoformat()))
+    logger.debug("Using {}".format(parameters))
     start = time.time()
     runner = minds_sim.run()
 
@@ -88,14 +95,15 @@ def run_minds(parameters, locs):
                       runner.average_energy(),
                       runner.max_buffer_size())
 
-    print("Finished MINDS in {} seconds".format(time.time() - start))
+    logger.debug("Finished MINDS in {} seconds".format(time.time() - start))
     return results
 
 
 def run_focus(parameters, locs):
     focus_sim = FOCUS(locs)
-    print("Starting FOCUS at {}".format(datetime.datetime.now().isoformat()))
-    print("Using {}".format(parameters))
+    logger.debug(
+        "Starting FOCUS at {}".format(datetime.datetime.now().isoformat()))
+    logger.debug("Using {}".format(parameters))
     start = time.time()
     runner = focus_sim.run()
 
@@ -105,22 +113,15 @@ def run_focus(parameters, locs):
                       runner.average_energy(),
                       runner.max_buffer_size())
 
-    print("Finished FOCUS in {} seconds".format(time.time() - start))
+    logger.debug("Finished FOCUS in {} seconds".format(time.time() - start))
     return results
 
 
 def run(parameters):
     tocs_results = []
     flower_results = []
-    minds_results = []
-    focus_results = []
-
-    # Legacy parameters configurations for old FLOWER
-    params.SEGMENT_COUNT = parameters.segment_count
-    params.MDC_COUNT = parameters.mdc_count
-    params.ISDVA = parameters.isdva
-    params.ISDVSD = parameters.isdvsd
-    params.COMMUNICATION_RANGE = parameters.radio_range
+    minds_results = [Results(0, 0, 0, 0, 0)]
+    focus_results = [Results(0, 0, 0, 0, 0)]
 
     env = Environment()
     env.segment_count = parameters.segment_count
@@ -129,32 +130,46 @@ def run(parameters):
     env.isdvsd = parameters.isdvsd
     env.comms_range = parameters.radio_range * pq.m
 
-    MAX_PROCESSES = 64
+    # MAX_PROCESSES = 64
+    MAX_PROCESSES = 4
     with multiprocessing.Pool(processes=MAX_PROCESSES) as pool:
 
         while len(tocs_results) <= RUNS or \
-                        len(flower_results) <= RUNS or \
-                        len(minds_results) <= RUNS or \
-                        len(focus_results) <= RUNS:
+                        len(flower_results) <= RUNS:
+            # len(minds_results) <= RUNS or \
+            # len(focus_results) <= RUNS:
 
             tocs_runners = MAX_PROCESSES // 4
             flower_runners = MAX_PROCESSES // 4
-            minds_runners = MAX_PROCESSES // 4
-            focus_runners = MAX_PROCESSES // 4
+            minds_runners = 0  # MAX_PROCESSES // 4
+            focus_runners = 0  # MAX_PROCESSES // 4
 
             locs = np.random.rand(env.segment_count, 2) * env.grid_height
 
-            tocs_workers = [pool.apply_async(run_tocs, (parameters, locs)) for
-                            _ in range(tocs_runners)]
+            tocs_workers = []
+            flower_workers = []
+            minds_workers = []
+            focus_workers = []
 
-            flower_workers = [pool.apply_async(run_flower, (parameters, locs))
-                              for _ in range(flower_runners)]
+            if len(tocs_results) <= RUNS:
+                tocs_workers = [pool.apply_async(run_tocs, (parameters, locs))
+                                for
+                                _ in range(tocs_runners)]
 
-            minds_workers = [pool.apply_async(run_minds, (parameters, locs))
-                             for _ in range(minds_runners)]
+            if len(flower_results) <= RUNS:
+                flower_workers = [
+                    pool.apply_async(run_flower, (parameters, locs))
+                    for _ in range(flower_runners)]
 
-            focus_workers = [pool.apply_async(run_focus, (parameters, locs))
-                             for _ in range(focus_runners)]
+            if len(minds_results) <= RUNS:
+                minds_workers = [
+                    pool.apply_async(run_minds, (parameters, locs))
+                    for _ in range(minds_runners)]
+
+            if len(focus_results) <= RUNS:
+                focus_workers = [
+                    pool.apply_async(run_focus, (parameters, locs))
+                    for _ in range(focus_runners)]
 
             for result in tocs_workers:
                 try:
@@ -201,6 +216,7 @@ def main():
     parameters = [Parameters._make(p) for p in sim_inputs.conductor_params]
 
     headers = ['max_delay', 'balance', 'lifetime', 'ave_energy', 'max_buffer']
+    # noinspection PyProtectedMember
     headers += parameters[0]._fields
 
     results_dir = os.path.join('C:', os.sep, 'results')
@@ -239,15 +255,19 @@ def main():
         for parameter in parameters:
             tocs_res, flower_res, minds_res, focus_res = run(parameter)
 
+            # noinspection PyProtectedMember,PyProtectedMember
             tocs_writer.writerow(
                 {**tocs_res._asdict(), **parameter._asdict()})
 
+            # noinspection PyProtectedMember,PyProtectedMember
             flower_writer.writerow(
                 {**flower_res._asdict(), **parameter._asdict()})
 
+            # noinspection PyProtectedMember,PyProtectedMember
             minds_writer.writerow(
                 {**minds_res._asdict(), **parameter._asdict()})
 
+            # noinspection PyProtectedMember,PyProtectedMember
             focus_writer.writerow(
                 {**focus_res._asdict(), **parameter._asdict()})
 

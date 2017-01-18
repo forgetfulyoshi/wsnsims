@@ -1,5 +1,5 @@
 import quantities as pq
-
+import numpy as np
 
 class SingletonDecorator:
     """

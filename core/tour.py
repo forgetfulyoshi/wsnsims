@@ -65,7 +65,7 @@ class Tour(object):
         return self._length
 
 
-def compute_tour(points, radio_range=0.):
+def compute_tour(points, radio_range=0. * pq.m):
     """
     For a given set of points, calculate a tour that covers each point once.
     This implementation of TSP is based on that used by IDM-kMDC, in which
@@ -103,6 +103,12 @@ def compute_tour(points, radio_range=0.):
     collection_points = np.empty_like(points)
     center_of_mass = linalg.centroid(points[vertices])
     for vertex in vertices:
+        if np.all(np.isclose(center_of_mass.magnitude,
+                             points[vertex].magnitude)):
+
+            collection_points[vertex] = np.copy(points[vertex].magnitude) * pq.meter
+            continue
+
         cp = center_of_mass - points[vertex]
         cp /= np.linalg.norm(cp)
         cp *= radio_range.magnitude
@@ -164,6 +170,5 @@ def compute_tour(points, radio_range=0.):
         assert i in tour
     assert len(tour) == len(points) + 1
     assert len(route.points) == len(route.collection_points)
-    assert np.all(route.collection_points)
 
     return route

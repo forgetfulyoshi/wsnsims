@@ -3,9 +3,11 @@ import logging
 
 import quantities as pq
 
+from core import point
 from core.cluster import BaseCluster
 
 logger = logging.getLogger(__name__)
+
 
 class ToCSCluster(BaseCluster):
     def __init__(self):
@@ -106,7 +108,7 @@ def combine_clusters(clusters, centroid):
         index += 1
 
     cost, _, c_i, c_j = min(decorated)
-    logger.info("Combining %s and %s (Cost: %f)", c_i, c_j, cost)
+    logger.debug("Combining %s and %s (Cost: %f)", c_i, c_j, cost)
 
     new_clusters = list(clusters)
     new_cluster = c_i.merge(c_j)
@@ -118,3 +120,15 @@ def combine_clusters(clusters, centroid):
     new_clusters.remove(c_j)
     new_clusters.append(new_cluster)
     return new_clusters
+
+
+class RelayNode(object):
+    def __init__(self, position):
+        self.location = point.Vec2(position)
+        self.cluster_id = -1
+
+    def __str__(self):
+        return "RelayNode {}".format(self.location)
+
+    def __repr__(self):
+        return "RN{}".format(self.location)

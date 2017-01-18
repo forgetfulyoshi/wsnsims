@@ -1,15 +1,18 @@
+import logging
 import quantities as pq
 import numpy as np
 import scipy.sparse.csgraph as sp
 
 from core import environment
 
+logger = logging.getLogger(__name__)
 
-class ToCSMovementError(Exception):
+
+class FLOWERMovementError(Exception):
     pass
 
 
-class ToCSMovementModel(object):
+class FLOWERMovementModel(object):
     def __init__(self, simulation_data):
         self.sim = simulation_data
         self.env = environment.Environment()
@@ -19,7 +22,7 @@ class ToCSMovementModel(object):
         #: Cached version of the adjacency matrix. Weights are path lengths.
         self._adj_mat = self._compute_adjacency_matrix()
 
-        self._distance_mat = self._compute_paths()
+        self._distance_mat, self._preds = self._compute_paths()
 
     def _compute_adjacency_matrix(self):
         """
@@ -32,32 +35,20 @@ class ToCSMovementModel(object):
         :return: None
         """
 
-        # for clust in self.sim.clusters + [self.sim.centroid]:
-        #     route = clust.tour
-        #     assert not np.any(np.isinf(route.collection_points))
-
-        # for i, seg in enumerate(self.sim.segments + self.sim.centroid.segments):
-        #     self._segment_indexes[seg] = i
-
         i = 0
-        for clust in self.sim.clusters + [self.sim.centroid]:
-            for seg_vertex in clust.tour.vertices:
-                seg = clust.tour.objects[seg_vertex]
+        for cluster in self.sim.clusters + [self.sim.hub]:
+            for seg_vertex in cluster.tour.vertices:
+                seg = cluster.tour.objects[seg_vertex]
                 if seg not in self._segment_indexes:
                     self._segment_indexes[seg] = i
                     i += 1
 
-        # First we need to get the total number of segments and relay nodes so
-        # we can create an N x N matrix. This is simply the number of segments
-        # plus the number of rendezvous points. As ToCS guarantees a single
-        # rendezvous point per cluster, we can just use the number of clusters.
-
-        node_count = len(self.sim.segments) + len(self.sim.clusters)
+        node_count = len(self.sim.cells) + 1
         g_sparse = np.zeros((node_count, node_count), dtype=float)
         g_sparse[:] = np.inf
 
-        for clust in self.sim.clusters + [self.sim.centroid]:
-            cluster_tour = clust.tour
+        for cluster in self.sim.clusters + [self.sim.hub]:
+            cluster_tour = cluster.tour
             i = len(cluster_tour.vertices) - 1
             j = 0
             while j < len(cluster_tour.vertices):
@@ -91,22 +82,23 @@ class ToCSMovementModel(object):
         :rtype: np.array
         """
 
-        distance_mat = sp.dijkstra(self._adj_mat, directed=True)
+        distance_mat, preds = sp.dijkstra(self._adj_mat, directed=True,
+                                          return_predecessors=True)
         # assert not np.any(np.isinf(distance_mat))
         if np.any(np.isinf(distance_mat)):
             logger.debug("Found inf distance!!")
 
-        return distance_mat
+        return distance_mat, preds
 
     def shortest_distance(self, begin, end):
         """
         Get the shortest distance between any two segments.
 
         :param begin:
-        :type begin: core.segment.Segment
+        :type begin: flower.cell.Cell
         :param end:
-        :type end: core.segment.Segment
-        :return: float
+        :type end: flower.cell.Cell
+        :return: float, list(int)
         """
 
         begin_index = self._segment_indexes[begin]
@@ -114,4 +106,17 @@ class ToCSMovementModel(object):
 
         distance = self._distance_mat[begin_index, end_index]
         distance *= pq.meter
-        return distance
+
+        path = [begin]
+        inv_index = {v: k for k, v in self._segment_indexes.items()}
+        while True:
+            next_index = self._preds[end_index, begin_index]
+            if next_index == -9999:
+                break
+
+            begin_index = next_index
+
+            seg = inv_index[next_index]
+            path.append(seg)
+
+        return distance, path

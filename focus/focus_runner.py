@@ -42,7 +42,7 @@ class FOCUSRunner(object):
             msg = "{} to {} is {}".format(
                 begin, end, self.movement_model.shortest_distance(begin, end))
 
-            print(msg)
+            logger.debug(msg)
 
         self.sim.show_state()
 
