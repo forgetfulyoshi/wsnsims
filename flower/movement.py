@@ -1,4 +1,6 @@
 import logging
+
+import itertools
 import quantities as pq
 import numpy as np
 import scipy.sparse.csgraph as sp
@@ -120,3 +122,12 @@ class FLOWERMovementModel(object):
             path.append(seg)
 
         return distance, path
+
+    def print_all_distances(self):
+
+        cell_pairs = itertools.permutations(
+            self.sim.cells + [self.sim.damaged], 2)
+
+        for src, dst in cell_pairs:
+            distance, _ = self.shortest_distance(src, dst)
+            logger.debug("%s -> %s: %f", src, dst, distance)
