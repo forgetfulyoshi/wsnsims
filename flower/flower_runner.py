@@ -4,7 +4,8 @@ import logging
 import numpy as np
 import quantities as pq
 
-from core import data, environment
+from core import environment
+from flower import data
 from flower.energy import FLOWEREnergyModel
 from flower.movement import FLOWERMovementModel
 
@@ -87,7 +88,7 @@ class FLOWERRunner(object):
             transmission_count = 3
 
         transmission_delay = transmission_count
-        transmission_delay *= data.segment_volume(begin, end)
+        transmission_delay *= data.cell_volume(begin, end)
         transmission_delay /= self.env.comms_rate
 
         relay_delay = self.holding_time(begin, end)
@@ -153,8 +154,8 @@ class FLOWERRunner(object):
             if src == dst:
                 continue
 
-            data_volume += data.segment_volume(src, dst)
-            data_volume += data.segment_volume(dst, src)
+            data_volume += data.cell_volume(src, dst)
+            data_volume += data.cell_volume(dst, src)
 
         transmit_time = data_volume / self.env.comms_rate
         total_time = travel_time + transmit_time
@@ -192,14 +193,14 @@ class FLOWERRunner(object):
         data_volumes = list()
         for current in self.sim.clusters:
 
-            external_cells = list(set(self.sim.segments) - set(current.segments))
-            pairs = itertools.product(external_cells, current.segments)
+            external_cells = list(set(self.sim.cells) - set(current.cells))
+            pairs = itertools.product(external_cells, current.cells)
 
             incoming = np.sum(
-                [data.segment_volume(src, dst) for src, dst in pairs]) * pq.bit
+                [data.cell_volume(src, dst) for src, dst in pairs]) * pq.bit
 
             outgoing = np.sum(
-                [data.segment_volume(src, dst) for dst, src in pairs]) * pq.bit
+                [data.cell_volume(src, dst) for dst, src in pairs]) * pq.bit
 
             buffer_size = incoming + outgoing
             if current != self.sim.hub:
