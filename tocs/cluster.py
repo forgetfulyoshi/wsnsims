@@ -39,7 +39,6 @@ class ToCSCluster(BaseCluster):
 class ToCSCentroid(ToCSCluster):
     def __init__(self):
         super(ToCSCentroid, self).__init__()
-        self.rendezvous_points = {}
         self._radio_range = 0. * pq.meter
         self._segments = []
 

@@ -1,8 +1,9 @@
+import itertools
 import quantities as pq
 import numpy as np
 
 import core.environment
-import core.data
+from core.data import segment_volume
 
 
 class ToCSEnergyModelError(Exception):
@@ -34,48 +35,27 @@ class ToCSEnergyModel(object):
 
         cluster = self._find_cluster(cluster_id)
 
-        if not cluster.segments:
-            return 0 * pq.bit
+        # Handle the intra-cluster data volume
+        segment_pairs = itertools.permutations(cluster.segments, 2)
+        internal_volume = np.sum(
+            [segment_volume(*pair) for pair in segment_pairs]) * pq.bit
 
-        # Handle all intra-cluster data
-        cluster_segs = cluster.segments
-        intracluster_seg_pairs = [(src, dst) for src in cluster_segs for dst in cluster_segs if src != dst]
-        data_vol = np.sum([core.data.volume(src, dst) for src, dst in intracluster_seg_pairs]) * pq.bit
+        # Handle the inter-cluster data volume
 
-        # Handle inter-cluster data at the rendezvous point
-        all_segments = self.sim.segments
-        other_segs = [c for c in all_segments if c.cluster_id != cluster.cluster_id]
-        intercluster_seg_pairs = [(src, dst) for src in cluster_segs for dst in other_segs]
-        intercluster_seg_pairs += [(src, dst) for src in other_segs for dst in cluster_segs]
+        external_segments = list(
+            set(self.sim.segments) - set(cluster.segments))
+        # Outgoing data ...
+        segment_pairs = list(
+            itertools.product(cluster.segments, external_segments))
 
-        # data volume for inter-cluster traffic
-        data_vol += np.sum([core.data.volume(src, dst) for src, dst in intercluster_seg_pairs]) * pq.bit
+        # Incoming data ...
+        segment_pairs += list(
+            itertools.product(external_segments, cluster.segments))
+        external_volume = np.sum(
+            [segment_volume(*pair) for pair in segment_pairs]) * pq.bit
 
-        return data_vol
-
-        # current_cluster = self._find_cluster(cluster_id)
-        #
-        # # Handle all intra-cluster volume
-        # cluster_segs = current_cluster.segments
-        #
-        # intracluster_seg_pairs = [(src, dst) for src in cluster_segs for dst in
-        #                           cluster_segs if src != dst]
-        #
-        # data_vol = np.sum([core.data.volume(src, dst) for src, dst in
-        #                 intracluster_seg_pairs]) * pq.bit
-        #
-        # # Handle inter-cluster volume at the rendezvous point
-        # other_segs = [c for c in self.sim.segments if
-        #               c.cluster_id != cluster_id]
-        # intercluster_seg_pairs = [(src, dst) for src in cluster_segs for dst in
-        #                           other_segs]
-        # intercluster_seg_pairs += [(src, dst) for src in other_segs for dst in
-        #                            cluster_segs]
-        #
-        # # volume volume for inter-cluster traffic
-        # data_vol += np.sum([core.data.volume(src, dst) for src, dst in intercluster_seg_pairs]) * pq.bit
-        #
-        # return data_vol
+        total_volume = internal_volume + external_volume
+        return total_volume
 
     def _centroid_data_volume(self, cluster_id):
         """
@@ -85,77 +65,33 @@ class ToCSEnergyModel(object):
         :rtype: pq.bit
         """
 
-        cluster = self._find_cluster(cluster_id)
+        centroid = self._find_cluster(cluster_id)
 
-        # Handle all intra-cluster data for the hub
-        if cluster.segments:
-            hub_segs = cluster.segments
-            hub_seg_pairs = [(src, dst) for src in hub_segs for dst in hub_segs
-                             if src != dst]
-            data_vol = np.sum([core.data.volume(src, dst) for src, dst in hub_seg_pairs]) * pq.bit
-        else:
-            data_vol = 0 * pq.bit
+        # Handle the intra-centroid data volume
+        segment_pairs = itertools.permutations(centroid.segments, 2)
+        volume = np.sum([segment_volume(*pair) for pair in segment_pairs]) * pq.bit
 
-        # Handle inter-cluster data for other clusters
-        all_segments = self.sim.segments
+        cluster_pairs = list()
+        # Handle the incoming volume from each cluster
+        for cluster in self.sim.clusters:
 
-        for clust in self.sim.clusters:
-            local_segs = clust.segments
-            remote_segs = [seg for seg in all_segments if seg not in clust.segments]
+            other_clusters = list(self.sim.clusters)
+            for other_cluster in other_clusters:
+                # Cluster -> Other Cluster
+                cluster_pairs.append((cluster, other_cluster))
 
-            # Generate the pairs of local-to-remote segments
-            seg_pairs = [(seg_1, seg_2) for seg_1 in local_segs for seg_2 in
-                         remote_segs]
+                # Other Cluster -> Cluster
+                cluster_pairs.append((other_cluster, cluster))
 
-            # Generate the pairs of remote-to-local segments
-            seg_pairs += [(seg_1, seg_2) for seg_1 in remote_segs for seg_2 in
-                          local_segs]
+        for src_cluster, dst_cluster in cluster_pairs:
+            src_segments = src_cluster.segments
+            dst_segments = dst_cluster.segments
 
-            # Add the inter-cluster data volume
-            data_vol += np.sum([core.data.volume(src, dst) for src, dst in seg_pairs]) * pq.bit
+            segment_pairs = itertools.product(src_segments, dst_segments)
+            volume += np.sum(
+                [segment_volume(*pair) for pair in segment_pairs]) * pq.bit
 
-        # Handle inter-cluster data for the hub itself
-        # This is done by the above loop
-
-        return data_vol
-
-        # current_cluster = self._find_cluster(cluster_id)
-        #
-        # # Handle all intra-cluster volume for the hub
-        # if current_cluster.segments:
-        #     hub_segs = current_cluster.segments
-        #     hub_seg_pairs = [(src, dst) for src in hub_segs for dst in hub_segs
-        #                      if src != dst]
-        #     data_vol = np.sum(
-        #         [core.data.volume(src, dst) for src, dst in hub_seg_pairs]) * pq.bit
-        # else:
-        #     data_vol = 0. * pq.bit
-        #
-        # # Handle inter-cluster volume for other clusters
-        # for clust in self.sim.clusters:
-        #     if clust.cluster_id == cluster_id:
-        #         continue
-        #
-        #     local_segs = clust.segments
-        #     remote_segs = [seg for seg in self.sim.segments if
-        #                    seg.cluster_id != cluster_id]
-        #
-        #     # Generate the pairs of local-to-remote segments
-        #     seg_pairs = [(seg_1, seg_2) for seg_1 in local_segs for seg_2 in
-        #                  remote_segs]
-        #
-        #     # Generate the pairs of remote-to-local segments
-        #     seg_pairs += [(seg_1, seg_2) for seg_1 in remote_segs for seg_2 in
-        #                   local_segs]
-        #
-        #     # Add the inter-cluster volume volume
-        #     data_vol += np.sum(
-        #         [core.data.volume(src, dst) for src, dst in seg_pairs]) * pq.bit
-        #
-        # # Handle inter-cluster volume for the hub itself
-        # # This is done by the above loop
-        #
-        # return data_vol
+        return volume
 
     def total_comms_energy(self, cluster_id):
 

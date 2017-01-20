@@ -27,7 +27,7 @@ class MINDSRunner(object):
         :type sim: minds.minds_sim.MINDS
         """
 
-        #: The simulation volume
+        #: The simulation segment_volume
         self.sim = sim
 
         self.env = environment.Environment()
@@ -109,7 +109,7 @@ class MINDSRunner(object):
         transmission_count, clusters = self.count_clusters(path)
 
         transmission_delay = transmission_count
-        transmission_delay *= data.volume(begin, end)
+        transmission_delay *= data.segment_volume(begin, end)
         transmission_delay /= self.env.comms_rate
 
         relay_delay = self.holding_time(clusters)
@@ -157,8 +157,8 @@ class MINDSRunner(object):
             if src == dst:
                 continue
 
-            data_volume += data.volume(src, dst)
-            data_volume += data.volume(dst, src)
+            data_volume += data.segment_volume(src, dst)
+            data_volume += data.segment_volume(dst, src)
 
         transmit_time = data_volume / self.env.comms_rate
         total_time = travel_time + transmit_time
@@ -202,10 +202,10 @@ class MINDSRunner(object):
             pairs = itertools.product(external_segments, current.nodes)
 
             incoming = np.sum(
-                [data.volume(src, dst) for src, dst in pairs]) * pq.bit
+                [data.segment_volume(src, dst) for src, dst in pairs]) * pq.bit
 
             outgoing = np.sum(
-                [data.volume(src, dst) for dst, src in pairs]) * pq.bit
+                [data.segment_volume(src, dst) for dst, src in pairs]) * pq.bit
 
             data_volumes.append(incoming + outgoing)
 

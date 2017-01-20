@@ -17,6 +17,7 @@ from focus.focus_runner import FOCUSRunner
 
 logger = logging.getLogger(__name__)
 
+
 class FOCUS(object):
     def __init__(self, locs):
         self.segments = [Segment(nd) for nd in locs]

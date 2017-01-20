@@ -50,6 +50,9 @@ class BaseCluster(object):
     def __str__(self):
         return "Cluster {}".format(self.cluster_id)
 
+    def __repr__(self):
+        return "BC {}".format(self.cluster_id)
+
     @property
     def cluster_id(self):
         return self._cluster_id

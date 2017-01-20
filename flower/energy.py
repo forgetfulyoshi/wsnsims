@@ -4,7 +4,7 @@ import collections
 import numpy as np
 import quantities as pq
 
-import core.data
+from flower.data import cell_volume
 import core.environment
 
 
@@ -23,137 +23,93 @@ class FLOWEREnergyModel(object):
         self.sim = simulation_data
         self.env = core.environment.Environment()
 
-    def _cluster_data_volume(self, clust):
+    def _cluster_data_volume(self, cluster):
         """
 
-        :param cluster_id:
+        :param cluster:
+        :type cluster: flower.cluster.FLOWERCluster
         :return:
         :rtype: pq.bit
         """
 
-        if not clust.cells:
-            return 0 * pq.bit
+        # Handle the intra-cluster data volume
+        cell_pairs = itertools.permutations(cluster.cells, 2)
+        internal_volume = np.sum(
+            [cell_volume(*pair) for pair in cell_pairs]) * pq.bit
 
-        all_cells = self.sim.cells
+        # Handle the inter-cluster data volume
 
-        # Handle all intra-cluster data
-        cluster_cells = clust.cells
-        cluster_segs = [seg for segs in [c.segments for c in cluster_cells] for seg in segs]
-        intracluster_seg_pairs = [(src, dst) for src in cluster_segs for dst in cluster_segs if src != dst]
-        data_vol = np.sum([core.data.volume(src, dst) for src, dst in intracluster_seg_pairs]) * pq.bit
+        external_cells = list(set(self.sim.cells) - set(cluster.cells))
+        # Outgoing data ...
+        cell_pairs = list(itertools.product(cluster.cells, external_cells))
 
-        # Handle inter-cluster data at the anchor
-        other_cells = [c for c in all_cells if c.cluster_id != clust.cluster_id]
-        other_segs = [seg for segs in [c.segments for c in other_cells] for seg in segs]
-        intercluster_seg_pairs = [(src, dst) for src in cluster_segs for dst in other_segs]
-        intercluster_seg_pairs += [(src, dst) for src in other_segs for dst in cluster_segs]
+        # Incoming data ...
+        cell_pairs += list(itertools.product(external_cells, cluster.cells))
+        external_volume = np.sum(
+            [cell_volume(*pair) for pair in cell_pairs]) * pq.bit
 
-        # data volume for inter-cluster traffic
-        data_vol += np.sum([core.data.volume(src, dst) for src, dst in intercluster_seg_pairs]) * pq.bit
+        total_volume = internal_volume + external_volume
+        return total_volume
 
-        return data_vol
-
-        # current_cluster = clust
-        #
-        # intracluster_pairs = itertools.permutations(current_cluster.cells, 2)
-        # data_vol = np.sum([core.data.volume(src, dst) for src, dst in
-        #                    intracluster_pairs]) * pq.bit
-        #
-        # other_cells = list(set(self.sim.cells) - set(current_cluster.cells))
-        # itercluster_pairs = [(src, dst) for src in current_cluster.cells
-        #                      for dst in other_cells]
-        #
-        # itercluster_pairs += [(src, dst) for src in other_cells
-        #                       for dst in current_cluster.cells]
-        #
-        # # volume for inter-cluster traffic
-        # data_vol += np.sum([core.data.volume(src, dst) for src, dst in
-        #                     itercluster_pairs]) * pq.bit
-        #
-        # return data_vol
-
-    def _hub_data_volume(self, clust):
+    def neighbor_clusters(self, cluster):
         """
 
-        :param cluster_id:
+        :param cluster:
+        :type cluster: flower.cluster.FLOWERCluster
+        :return:
+        :type: list(flower.cluster.FLOWERCluster)
+        """
+
+        neighbors = list()
+        for other_cluster in self.sim.clusters:
+            if other_cluster.anchor == cluster.anchor:
+                neighbors.append(other_cluster)
+
+        return neighbors
+
+    def _hub_data_volume(self, hub):
+        """
+
+        :param hub:
+        :type hub: flower.cluster.FLOWERHubCluster
         :return:
         :rtype: pq.bit
         """
 
-        if not clust.cells:
-            return 0 * pq.bit
+        # Handle the intra-hub data volume
+        cell_pairs = itertools.permutations(hub.cells, 2)
+        volume = np.sum([cell_volume(*pair) for pair in cell_pairs]) * pq.bit
 
-        # Handle all intra-cluster data for the hub
-        all_cells = self.sim.cells
-        hub_cells = [c for c in all_cells if c.cluster_id == clust.cluster_id]
-        hub_segs = [seg for segs in [c.segments for c in hub_cells] for seg in segs]
-        hub_seg_pairs = [(src, dst) for src in hub_segs for dst in hub_segs if src != dst]
-        data_vol = np.sum([core.data.volume(src, dst) for src, dst in hub_seg_pairs]) * pq.bit
+        cluster_pairs = list()
+        # Handle the incoming volume from each cluster
+        for cluster in self.sim.clusters:
+            # If a cluster shares an anchor with another, then the hub MDC
+            # won't need to handle data between those clusters. Therefore, we
+            # need to carefully build our set of cluster pairs.
 
-        # Handle inter-cluster data for other clusters
-        all_clusters = self.sim.clusters + [self.sim.hub]
-        anchor_cells = [a for a in [c.anchor for c in all_clusters if c.cluster_id != clust.cluster_id]]
-        anchor_cells = list(set(anchor_cells))
+            other_clusters = list(self.sim.clusters)
 
-        for cell in anchor_cells:
-            # Get the segments served by this anchor
-            local_clusters = [c for c in all_clusters if c.anchor == cell]
-            local_cells = [c for c in all_cells if c.cluster_id in [clust.cluster_id for clust in local_clusters]]
-            local_segs = [seg for segs in [c.segments for c in local_cells] for seg in segs]
+            # Filter out clusters that share an anchor with this one
+            neighbors = self.neighbor_clusters(cluster)
+            for neighbor in neighbors:
+                other_clusters.remove(neighbor)
 
-            # Get the segments not served by this anchor
-            remote_clusters = [c for c in all_clusters if c.anchor != cell and c != self]
-            remote_cells = [c for c in all_cells if c.cluster_id in [clust.cluster_id for clust in remote_clusters]]
-            remote_segs = [seg for segs in [c.segments for c in remote_cells] for seg in segs]
+            for other_cluster in other_clusters:
+                # Cluster -> Other Cluster
+                cluster_pairs.append((cluster, other_cluster))
 
-            # Generate the pairs of local-to-remote segments
-            seg_pairs = [(seg_1, seg_2) for seg_1 in local_segs for seg_2 in remote_segs]
+                # Other Cluster -> Cluster
+                cluster_pairs.append((other_cluster, cluster))
 
-            # Generate the pairs of remote-to-local segments
-            seg_pairs += [(seg_1, seg_2) for seg_1 in remote_segs for seg_2 in local_segs]
+        for src_cluster, dst_cluster in cluster_pairs:
+            src_cells = src_cluster.cells
+            dst_cells = dst_cluster.cells
 
-            # Add the inter-cluster data volume
-            data_vol += np.sum([core.data.volume(src, dst) for src, dst in seg_pairs]) * pq.bit
+            cell_pairs = itertools.product(src_cells, dst_cells)
+            volume += np.sum(
+                [cell_volume(*pair) for pair in cell_pairs]) * pq.bit
 
-        # Handle inter-cluster data for the hub itself
-        # This is done by the above loop
-
-        return data_vol
-
-        # current_cluster = clust
-        #
-        # # Handle all intra-cluster volume for the hub
-        # if current_cluster.cells:
-        #     hub_cells = current_cluster.cells
-        #     hub_cell_pairs = [(src, dst) for src in hub_cells for dst in
-        #                       hub_cells if src != dst]
-        #     data_vol = np.sum([core.data.volume(src, dst) for src, dst in
-        #                        hub_cell_pairs]) * pq.bit
-        # else:
-        #     data_vol = 0. * pq.bit
-        #
-        # # Handle inter-cluster volume for other clusters
-        # for cluster in self.sim.clusters:
-        #     local_cells = cluster.cells
-        #     remote_cells = [cell for cell in self.sim.cells if
-        #                     cell not in cluster.cells]
-        #
-        #     # Generate the pairs of local-to-remote segments
-        #     cell_pairs = [(src, dst) for src in local_cells for dst in
-        #                   remote_cells]
-        #
-        #     # Generate the pairs of remote-to-local segments
-        #     cell_pairs += [(src, dst) for src in remote_cells for dst in
-        #                    local_cells]
-        #
-        #     # Add the inter-cluster volume volume
-        #     data_vol += np.sum([core.data.volume(src, dst) for src, dst in
-        #                         cell_pairs]) * pq.bit
-        #
-        # # Handle inter-cluster volume for the hub itself
-        # # This is done by the above loop
-        #
-        # return data_vol
+        return volume
 
     def total_comms_energy(self, clust):
 
@@ -192,12 +148,12 @@ class FLOWEREnergyModel(object):
 
         return found_cluster
 
-    def total_movement_energy(self, clust):
+    def total_movement_energy(self, cluster):
         """
         Return the amount of energy required to complete a single tour of the
         specified cluster.
 
-        :param clust: An instance of a FLOWER cluster.
+        :param cluster: An instance of a FLOWER cluster.
 
         :return: The amount of energy required.
         :rtype: pq.J
@@ -206,7 +162,7 @@ class FLOWEREnergyModel(object):
         # if cluster_id in self._ids_to_movement_energy:
         #     return self._ids_to_movement_energy[cluster_id]
 
-        energy = clust.tour_length * self.env.move_cost
+        energy = cluster.tour_length * self.env.move_cost
         # self._ids_to_movement_energy[cluster_id] = energy
         return energy
 

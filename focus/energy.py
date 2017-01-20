@@ -93,7 +93,7 @@ class FOCUSEnergyModel(object):
         cluster_segs = cluster.nodes
         intracluster_seg_pairs = [(src, dst) for src in cluster_segs for dst in
                                   cluster_segs if src != dst]
-        data_vol = np.sum([core.data.volume(src, dst) for src, dst in
+        data_vol = np.sum([core.data.segment_volume(src, dst) for src, dst in
                            intracluster_seg_pairs]) * pq.bit
 
         # Handle inter-cluster data at the rendezvous point
@@ -105,8 +105,8 @@ class FOCUSEnergyModel(object):
         intercluster_seg_pairs += [(src, dst) for src in other_segs for dst in
                                    cluster_segs]
 
-        # data volume for inter-cluster traffic
-        data_vol += np.sum([core.data.volume(src, dst) for src, dst in
+        # data segment_volume for inter-cluster traffic
+        data_vol += np.sum([core.data.segment_volume(src, dst) for src, dst in
                             intercluster_seg_pairs]) * pq.bit
 
         return data_vol

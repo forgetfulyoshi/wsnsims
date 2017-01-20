@@ -12,7 +12,7 @@ np.seterr(all='raise')
 class Tour(object):
     def __init__(self):
         """
-        Contains all volume for a tour over a given set of points.
+        Contains all segment_volume for a tour over a given set of points.
         """
 
         #: The original set of points for which a tour was calculated

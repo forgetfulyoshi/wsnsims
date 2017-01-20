@@ -1,5 +1,9 @@
+import collections
+
+import itertools
 import quantities as pq
 import numpy as np
+import scipy.sparse.csgraph as sp
 
 import core.environment
 import core.data
@@ -19,10 +23,57 @@ class MINDSEnergyModel(object):
 
         self.sim = simulation_data
         self.env = core.environment.Environment()
+        self.cluster_graph = self.build_cluster_graph()
 
         self._ids_to_clusters = {}
         self._ids_to_movement_energy = {}
         self._ids_to_comms_energy = {}
+
+    def build_cluster_graph(self):
+
+        cluster_graph = collections.defaultdict(list)
+        for cluster in self.sim.clusters:
+
+            other_clusters = list(self.sim.clusters)
+            other_clusters.remove(cluster)
+            for other_cluster in other_clusters:
+                if other_cluster.relay_node == cluster.relay_node:
+                    cluster_graph[cluster].append(other_cluster)
+
+        node_count = len(self.sim.clusters)
+        dense = np.zeros((node_count, node_count), dtype=float)
+
+        for cluster, neighbors in cluster_graph.items():
+
+            cluster_index = self.sim.clusters.index(cluster)
+            for neighbor in neighbors:
+                neighbor_index = self.sim.clusters.index(neighbor)
+
+                dense[cluster_index, neighbor_index] = 1
+                dense[neighbor_index, cluster_index] = 1
+
+        sparse = sp.csgraph_from_dense(dense)
+        return sparse
+
+    def sum_cluster_volume(self, parent, cluster):
+
+        children = list()
+        for other_cluster in self.sim.clusters:
+            if other_cluster == parent:
+                continue
+
+            if other_cluster.relay_node == cluster.relay_node:
+                children.append(other_cluster)
+
+        child_pairs = list()
+        for child in children:
+            child_pairs.append(self.sum_cluster_volume(cluster, child))
+
+        # All inter-cluster pairs for this cluster
+        other_segments = list(set(self.sim.segments) - set(cluster.nodes))
+        segment_pairs = list(itertools.permutations(other_))
+
+
 
     def _cluster_data_volume(self, cluster_id):
         """
@@ -32,33 +83,14 @@ class MINDSEnergyModel(object):
         :rtype: pq.bit
         """
 
-        current_cluster = self._find_cluster(cluster_id)
+        cluster = self._find_cluster(cluster_id)
+        cluster_index = self.sim.clusters.index(cluster)
+        cluster_tree, preds = sp.breadth_first_order(self.cluster_graph,
+                                                     cluster_index,
+                                                     directed=False,
+                                                     return_predecessors=True)
 
-        # Handle all intra-cluster volume
-        cluster_segs = current_cluster.nodes
 
-        intracluster_seg_pairs = [(src, dst) for src in cluster_segs for dst in
-                                  cluster_segs if src != dst]
-
-        data_vol = np.sum([core.data.volume(src, dst) for src, dst in
-                           intracluster_seg_pairs]) * pq.bit
-
-        # Handle inter-cluster volume at the rendezvous point
-        other_segs = list(self.sim.segments)
-        for seg in current_cluster.nodes:
-            other_segs.remove(seg)
-
-        intercluster_seg_pairs = [(src, dst) for src in cluster_segs for dst in
-                                  other_segs if src != dst]
-
-        intercluster_seg_pairs += [(src, dst) for src in other_segs for dst in
-                                   cluster_segs if src != dst]
-
-        # volume volume for inter-cluster traffic
-        data_vol += np.sum([core.data.volume(src, dst) for src, dst in
-                            intercluster_seg_pairs]) * pq.bit
-
-        return data_vol
 
     def total_comms_energy(self, cluster_id):
 
@@ -76,7 +108,7 @@ class MINDSEnergyModel(object):
 
         :param cluster_id:
         :return:
-        :rtype: tocs.cluster.ToCSCluster
+        :rtype: core.cluster.BaseCluster
         """
         if cluster_id in self._ids_to_clusters:
             return self._ids_to_clusters[cluster_id]
