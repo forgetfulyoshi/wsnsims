@@ -92,7 +92,7 @@ def compute_tour(points, radio_range=0. * pq.m):
     if len(points) == 2:
         vertices = np.array([0, 1])
     else:
-        hull = sp.ConvexHull(points, qhull_options='QJ')
+        hull = sp.ConvexHull(points, qhull_options='QJ Pp')
         vertices = hull.vertices
 
     route = Tour()
