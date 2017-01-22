@@ -187,22 +187,12 @@ class FLOWERRunner(object):
     def max_buffer_size(self):
 
         data_volumes = list()
-        for current in self.sim.clusters:
+        for cluster in self.sim.clusters:
+            volume = self.energy_model.cluster_data_volume(
+                cluster, intercluster_only=True)
 
-            external_cells = list(set(self.sim.cells) - set(current.cells))
-            pairs = itertools.product(external_cells, current.cells)
-
-            incoming = np.sum(
-                [data.cell_volume(src, dst) for src, dst in pairs]) * pq.bit
-
-            outgoing = np.sum(
-                [data.cell_volume(src, dst) for dst, src in pairs]) * pq.bit
-
-            buffer_size = incoming + outgoing
-            if current != self.sim.hub:
-                buffer_size /= len(current.anchor.segments)
-
-            data_volumes.append(buffer_size)
+            volume /= len(cluster.anchor.segments)
+            data_volumes.append(volume)
 
         max_data_volume = np.max(data_volumes) * pq.bit
         return max_data_volume

@@ -182,19 +182,14 @@ class ToCSRunner(object):
     def max_buffer_size(self):
 
         data_volumes = list()
-        for current in self.sim.clusters + [self.sim.centroid]:
-            external_segments = [s for s in self.sim.segments if
-                                 s.cluster_id != current.cluster_id]
+        for cluster in self.sim.clusters:
+            volume = self.energy_model.cluster_data_volume(
+                cluster.cluster_id, intercluster_only=False)
+            data_volumes.append(volume)
 
-            pairs = itertools.product(external_segments, current.segments)
-
-            incoming = np.sum(
-                [data.segment_volume(src, dst) for src, dst in pairs]) * pq.bit
-
-            outgoing = np.sum(
-                [data.segment_volume(src, dst) for dst, src in pairs]) * pq.bit
-
-            data_volumes.append(incoming + outgoing)
+        centroid_volume = self.energy_model.centroid_data_volume(
+            self.sim.centroid.cluster_id)
+        data_volumes.append(centroid_volume)
 
         max_data_volume = np.max(data_volumes) * pq.bit
         return max_data_volume

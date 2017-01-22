@@ -25,7 +25,7 @@ class ToCSEnergyModel(object):
         self._ids_to_movement_energy = {}
         self._ids_to_comms_energy = {}
 
-    def cluster_data_volume(self, cluster_id):
+    def cluster_data_volume(self, cluster_id, intercluster_only=False):
         """
 
         :param cluster_id:
@@ -35,10 +35,13 @@ class ToCSEnergyModel(object):
 
         cluster = self._find_cluster(cluster_id)
 
-        # Handle the intra-cluster data volume
-        segment_pairs = itertools.permutations(cluster.segments, 2)
-        internal_volume = np.sum(
-            [segment_volume(*pair) for pair in segment_pairs]) * pq.bit
+        if not intercluster_only:
+            # Handle the intra-cluster data volume
+            segment_pairs = itertools.permutations(cluster.segments, 2)
+            internal_volume = np.sum(
+                [segment_volume(*pair) for pair in segment_pairs]) * pq.bit
+        else:
+            internal_volume = 0 * pq.bit
 
         # Handle the inter-cluster data volume
 

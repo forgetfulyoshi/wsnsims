@@ -23,7 +23,7 @@ class FLOWEREnergyModel(object):
         self.sim = simulation_data
         self.env = core.environment.Environment()
 
-    def cluster_data_volume(self, cluster):
+    def cluster_data_volume(self, cluster, intercluster_only=False):
         """
 
         :param cluster:
@@ -32,13 +32,15 @@ class FLOWEREnergyModel(object):
         :rtype: pq.bit
         """
 
-        # Handle the intra-cluster data volume
-        cell_pairs = itertools.permutations(cluster.cells, 2)
-        internal_volume = np.sum(
-            [cell_volume(*pair) for pair in cell_pairs]) * pq.bit
+        if not intercluster_only:
+            # Handle the intra-cluster data volume
+            cell_pairs = itertools.permutations(cluster.cells, 2)
+            internal_volume = np.sum(
+                [cell_volume(*pair) for pair in cell_pairs]) * pq.bit
+        else:
+            internal_volume = 0. * pq.bit
 
         # Handle the inter-cluster data volume
-
         external_cells = list(set(self.sim.cells) - set(cluster.cells))
         # Outgoing data ...
         cell_pairs = list(itertools.product(cluster.cells, external_cells))

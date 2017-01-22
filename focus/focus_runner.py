@@ -249,20 +249,10 @@ class FOCUSRunner(object):
     def max_buffer_size(self):
 
         data_volumes = list()
-        for current in self.sim.clusters:
-            external_segments = [s for s in self.sim.segments if
-                                 (s not in current.nodes) or (
-                                     s != current.relay_node)]
-
-            pairs = itertools.product(external_segments, current.nodes)
-
-            incoming = np.sum(
-                [data.segment_volume(src, dst) for src, dst in pairs]) * pq.bit
-
-            outgoing = np.sum(
-                [data.segment_volume(src, dst) for dst, src in pairs]) * pq.bit
-
-            data_volumes.append(incoming + outgoing)
+        for cluster in self.sim.clusters:
+            volume = self.energy_model.cluster_data_volume(
+                cluster.cluster_id, intercluster_only=False)
+            data_volumes.append(volume)
 
         max_data_volume = np.max(data_volumes) * pq.bit
         return max_data_volume

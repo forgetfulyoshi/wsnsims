@@ -2,6 +2,8 @@ import collections
 import logging
 
 import itertools
+from code import interact
+
 import quantities as pq
 import numpy as np
 import scipy.sparse.csgraph as sp
@@ -61,7 +63,7 @@ class MINDSEnergyModel(object):
         sparse = sp.csgraph_from_dense(dense)
         return sparse
 
-    def cluster_data_volume(self, cluster_id):
+    def cluster_data_volume(self, cluster_id, intercluster_only=False):
         """
 
         :param cluster_id:
@@ -117,10 +119,13 @@ class MINDSEnergyModel(object):
         intercluster_volume = np.sum([segment_volume(src, dst)
                                       for src, dst in segment_pairs]) * pq.bit
 
-        # NOW we calculate the intra-cluster volume
-        segment_pairs = itertools.permutations(current_cluster.tour.objects, 2)
-        intracluster_volume = np.sum([segment_volume(src, dst)
-                                      for src, dst in segment_pairs]) * pq.bit
+        if not intercluster_only:
+            # NOW we calculate the intra-cluster volume
+            segment_pairs = itertools.permutations(current_cluster.tour.objects, 2)
+            intracluster_volume = np.sum([segment_volume(src, dst)
+                                          for src, dst in segment_pairs]) * pq.bit
+        else:
+            intracluster_volume = 0 * pq.bit
 
         # ... and the outgoing data volume from this cluster
         other_segments = list(
