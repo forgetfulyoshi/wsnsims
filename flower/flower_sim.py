@@ -615,10 +615,9 @@ class FLOWER(object):
 
 def main():
     env = environment.Environment()
-    # env.grid_height = 20000. * pq.meter
-    # env.grid_width = 20000. * pq.meter
-
     seed = int(time.time())
+
+    seed = 1485118300
 
     # General testing ...
     # seed = 1484764250

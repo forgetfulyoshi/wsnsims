@@ -45,7 +45,11 @@ class FLOWERMovementModel(object):
                     self._segment_indexes[seg] = i
                     i += 1
 
-        node_count = len(self.sim.cells) + 1
+        if self.sim.hub.cells == [self.sim.damaged]:
+            node_count = len(self.sim.cells) + 1
+        else:
+            node_count = len(self.sim.cells)
+
         g_sparse = np.zeros((node_count, node_count), dtype=float)
         g_sparse[:] = np.inf
 
