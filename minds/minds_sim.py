@@ -260,25 +260,22 @@ class MINDS(object):
 
 def main():
     env = environment.Environment()
-    # env.grid_height = 20000. * pq.meter
-    # env.grid_width = 20000. * pq.meter
-    # env.segment_count = 6
-    # env.mdc_count = 3
     seed = int(time.time())
-    # seed = 1483675991
+
+    # General testing ...
+    # seed = 1484764250
+    # env.segment_count = 12
+    # env.mdc_count = 5
+
+    # Specific testing ...
     # seed = 1483676009  # center has in-degree of 3
     # seed = 1483998718  # center has in-degree of 2
-
-    seed = 1484764250
-    env.segment_count = 12
-    env.mdc_count = 5
 
     logger.debug("Random seed is %s", seed)
     np.random.seed(seed)
     locs = np.random.rand(env.segment_count, 2) * env.grid_height
     sim = MINDS(locs)
     sim.run()
-    sim.show_state()
 
 
 if __name__ == '__main__':

@@ -618,10 +618,12 @@ def main():
     # env.grid_height = 20000. * pq.meter
     # env.grid_width = 20000. * pq.meter
 
-    # seed = int(time.time())
-    seed = 1484764250
-    env.segment_count = 12
-    env.mdc_count = 5
+    seed = int(time.time())
+
+    # General testing ...
+    # seed = 1484764250
+    # env.segment_count = 12
+    # env.mdc_count = 5
 
     # Triggers Ec >> Em with defaults
     # seed = 1484603730
@@ -636,7 +638,6 @@ def main():
     locs = np.random.rand(env.segment_count, 2) * env.grid_height
     sim = FLOWER(locs)
     sim.run()
-    sim.show_state()
 
 
 if __name__ == '__main__':
