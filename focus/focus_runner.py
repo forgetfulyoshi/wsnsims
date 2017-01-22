@@ -1,16 +1,15 @@
 import collections
+import logging
 import itertools
 
 import numpy as np
 import quantities as pq
 
-from core import data, environment
+from core import data, environment, orderedset
 from focus.energy import FOCUSEnergyModel
 from focus.movement import FOCUSMovementModel
 
-
-class FOCUSRunnerError(Exception):
-    pass
+logger = logging.getLogger(__name__)
 
 
 class FOCUSRunner(object):
@@ -68,20 +67,70 @@ class FOCUSRunner(object):
 
         return max_delay
 
+    def segment_clusters(self, segment):
+        """
+
+        :param segment:
+        :type segment: core.segment.Segment
+        :return:
+        :rtype: list(core.cluster.BaseCluster)
+        """
+        clusters = list()
+        for cluster in self.sim.clusters:
+            if segment in cluster.tour.objects:
+                clusters.append(cluster)
+
+        return clusters
+
     def count_clusters(self, path):
+        """
 
-        clusters = collections.defaultdict(list)
-        for clust in self.sim.clusters:
-            for seg in path:
-                if seg in clust.nodes:
-                    clusters[clust].append(seg)
+        :param path:
+        :type path: list(core.segment.Segment)
+        :return:
+        :rtype: list(core.cluster.BaseCluster)
+        """
+        path_clusters = list()
+        current_segment = path[0]
+        for next_segment in path[1:]:
 
-                if seg == clust.relay_node:
-                    clusters[clust].append(seg)
+            current_clusters = self.segment_clusters(current_segment)
+            next_clusters = self.segment_clusters(next_segment)
 
-        cluster_count = len([clusters.keys()])
+            if len(current_clusters) > 1 and len(next_clusters) > 1:
+                # Both are on relay points, so the current_segment cluster must
+                # be the common one between them.
 
-        return cluster_count, clusters
+                for cluster in current_clusters:
+                    if cluster in next_clusters:
+                        path_clusters.append(cluster)
+                        break
+
+            elif len(current_clusters) > 1:
+                # The current_segment segment is on a relay point. In this
+                # case, the next_segment segment is not on a relay point, so
+                # we can just use that.
+
+                path_clusters.append(next_clusters[0])
+
+            elif len(next_clusters) > 1:
+                # The next_segment segment is on a relay point. In this case,
+                # the current_segment segment is only in one cluster, so we
+                # just use that.
+
+                path_clusters.append(current_clusters[0])
+
+            else:
+                # Neither segments are relay points, just use the
+                # current_segment cluster
+                pass
+
+            # Move current_segment to the next_segment segment
+            current_segment = next_segment
+
+        # Remove any duplicates
+        path_clusters = list(orderedset.OrderedSet(path_clusters))
+        return path_clusters
 
     def communication_delay(self, begin, end):
         """
@@ -98,30 +147,42 @@ class FOCUSRunner(object):
         """
 
         duration, path = self.movement_model.shortest_distance(begin, end)
-        transmission_count, clusters = self.count_clusters(path)
+        path_clusters = self.count_clusters(path)
 
-        travel_delay = 0. * pq.second
-        segment = path[0]
-        for next_segment in path[1:]:
-            distance = np.linalg.norm(
-                segment.location.nd - next_segment.location.nd) * pq.meter
+        segment_speed_pairs = list()
+        path_index = 0
+        last_segment = None
+        for path_cluster in path_clusters:
+            segments = list()
+            if last_segment:
+                segments.append(last_segment)
 
-            current_cluster = None
-            for cluster, segments in clusters.items():
-                if segment in segments:
-                    current_cluster = cluster
+            while path[path_index] in path_cluster.tour.objects:
+                segments.append(path[path_index])
+                last_segment = path[path_index]
+
+                path_index += 1
+                if path_index >= len(path):
                     break
 
-            if np.all(np.isclose(current_cluster.mdc_speed.magnitude, 0.)):
-                continue
+            segment_speed_pairs.append((path_cluster.mdc_speed, segments))
 
-            travel_delay += distance / current_cluster.mdc_speed
+        travel_delay = 0. * pq.second
+        for speed, segments in segment_speed_pairs:
+            cluster_distance = 0 * pq.meter
+            start_segment = segments[0]
+            for end_segment in segments[1:]:
+                distance = np.linalg.norm(
+                    start_segment.location.nd - end_segment.location.nd) * pq.meter
+                cluster_distance += distance
 
-        transmission_delay = transmission_count
+            travel_delay += cluster_distance / speed
+
+        transmission_delay = len(path_clusters)
         transmission_delay *= data.segment_volume(begin, end)
         transmission_delay /= self.env.comms_rate
 
-        relay_delay = self.holding_time(clusters)
+        relay_delay = self.holding_time(path_clusters[1:])
 
         total_delay = travel_delay + transmission_delay + relay_delay
         return total_delay
@@ -135,44 +196,26 @@ class FOCUSRunner(object):
         :rtype: pq.second
         """
 
-        latency = 0. * pq.second
-        for clust in [clusters.keys()][1:]:
-            cluster_time = self.tour_time(clust)
-            latency += cluster_time
-
+        latency = np.sum([self.tour_time(c) for c in clusters]) * pq.second
         return latency
 
-    def tour_time(self, clust):
+    def tour_time(self, cluster):
         """
 
-        :param clust:
-        :type clust: focus.cluster.FOCUSCluster
+        :param cluster:
+        :type cluster: focus.cluster.FOCUSCluster
         :return:
         :rtype: pq.second
         """
 
-        if np.all(np.isclose(clust.mdc_speed.magnitude, 0.)):
-            return 0. * pq.second
+        if np.all(np.isclose(cluster.mdc_speed.magnitude, 0.)):
+            travel_time = 0. * pq.second
+        else:
+            travel_time = cluster.tour_length / cluster.mdc_speed
 
-        travel_time = clust.tour_length / clust.mdc_speed
-
-        # Compute the time required to upload and download all data from each
-        # segment in the cluster. This has to include both inter- and intra-
-        # cluster data. Because of this, we're going to simply enumerate all
-        # segments and for each one in the cluster, sum the data sent to the
-        # segment. Similarly, for each segment in the cluster, we will sum the
-        # data sent from the segment to all other segments.
-
-        data_volume = 0. * pq.bit
-        pairs = itertools.product(clust.segments, self.sim.segments)
-        for src, dst in pairs:
-            if src == dst:
-                continue
-
-            data_volume += data.segment_volume(src, dst)
-            data_volume += data.segment_volume(dst, src)
-
+        data_volume = self.energy_model.cluster_data_volume(cluster.cluster_id)
         transmit_time = data_volume / self.env.comms_rate
+
         total_time = travel_time + transmit_time
         return total_time
 

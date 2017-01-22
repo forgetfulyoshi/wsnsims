@@ -23,7 +23,7 @@ class FLOWEREnergyModel(object):
         self.sim = simulation_data
         self.env = core.environment.Environment()
 
-    def _cluster_data_volume(self, cluster):
+    def cluster_data_volume(self, cluster):
         """
 
         :param cluster:
@@ -67,7 +67,7 @@ class FLOWEREnergyModel(object):
 
         return neighbors
 
-    def _hub_data_volume(self, hub):
+    def hub_data_volume(self, hub):
         """
 
         :param hub:
@@ -117,9 +117,9 @@ class FLOWEREnergyModel(object):
         #     return self._ids_to_comms_energy[cluster_id]
 
         if clust == self.sim.hub:
-            data_volume = self._hub_data_volume(clust)
+            data_volume = self.hub_data_volume(clust)
         else:
-            data_volume = self._cluster_data_volume(clust)
+            data_volume = self.cluster_data_volume(clust)
 
         energy = data_volume * self.env.comms_cost
         # self._ids_to_comms_energy[cluster_id] = energy

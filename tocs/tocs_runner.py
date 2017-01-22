@@ -141,21 +141,12 @@ class ToCSRunner(object):
 
         travel_time = clust.tour_length / self.env.mdc_speed
 
-        # Compute the time required to upload and download all data from each
-        # segment in the cluster. This has to include both inter- and intra-
-        # cluster data. Because of this, we're going to simply enumerate all
-        # segments and for each one in the cluster, sum the data sent to the
-        # segment. Similarly, for each segment in the cluster, we will sum the
-        # data sent from the segment to all other segments.
-
-        data_volume = 0. * pq.bit
-        pairs = itertools.product(clust.segments, self.sim.segments)
-        for src, dst in pairs:
-            if src == dst:
-                continue
-
-            data_volume += data.segment_volume(src, dst)
-            data_volume += data.segment_volume(dst, src)
+        if clust == self.sim.centroid:
+            data_volume = self.energy_model.centroid_data_volume(
+                clust.cluster_id)
+        else:
+            data_volume = self.energy_model.cluster_data_volume(
+                clust.cluster_id)
 
         transmit_time = data_volume / self.env.comms_rate
         total_time = travel_time + transmit_time

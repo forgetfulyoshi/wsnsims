@@ -148,14 +148,10 @@ class FLOWERRunner(object):
         # segment. Similarly, for each segment in the cluster, we will sum the
         # data sent from the segment to all other segments.
 
-        data_volume = 0. * pq.bit
-        pairs = itertools.product(cluster.cells, self.sim.cells)
-        for src, dst in pairs:
-            if src == dst:
-                continue
-
-            data_volume += data.cell_volume(src, dst)
-            data_volume += data.cell_volume(dst, src)
+        if cluster == self.sim.hub:
+            data_volume = self.energy_model.hub_data_volume(cluster)
+        else:
+            data_volume = self.energy_model.cluster_data_volume(cluster)
 
         transmit_time = data_volume / self.env.comms_rate
         total_time = travel_time + transmit_time

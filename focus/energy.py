@@ -1,13 +1,16 @@
+import collections
 import logging
+import itertools
 
 import quantities as pq
 import numpy as np
 import scipy.sparse.csgraph as sp
 
 import core.environment
-import core.data
+from core.data import segment_volume
 
 logger = logging.getLogger(__name__)
+
 
 class FOCUSEnergyModelError(Exception):
     pass
@@ -23,6 +26,7 @@ class FOCUSEnergyModel(object):
 
         self.sim = simulation_data
         self.env = core.environment.Environment()
+        self.cluster_graph = self.build_cluster_graph()
 
         self._ids_to_clusters = {}
         self._ids_to_movement_energy = {}
@@ -32,34 +36,36 @@ class FOCUSEnergyModel(object):
 
     def _calculate_cluster_speeds(self):
 
-        # Generate an empty, N x N sparse graph
-        clusters = self.sim.clusters
-        node_count = len(clusters)
-        dense = np.zeros((node_count, node_count), dtype=float)
-        root_cluster = -1
-        most_intesections = 0
-        for cluster in clusters:
-            cluster_index = clusters.index(cluster)
-            if len(cluster.intersections) > most_intesections:
-                most_intesections = len(cluster.intersections)
-                root_cluster = cluster_index
+        # Find the cluster with the highest number of intersections
+        most_intersections = 0
+        root_cluster = None
+        for cluster in self.sim.clusters:
+            intersections = 0
+            for segment in cluster.tour.objects:
+                for other_cluster in self.sim.clusters:
+                    if other_cluster == cluster:
+                        continue
 
-            for child in cluster.intersections:
-                child_index = clusters.index(child)
-                dense[cluster_index, child_index] = 1
+                    if segment in other_cluster.tour.objects:
+                        intersections += 1
 
-        sparse = sp.csgraph_from_dense(dense)
-        nodes, preds = sp.breadth_first_order(sparse, root_cluster,
-                                              return_predecessors=True)
+            if intersections > most_intersections:
+                most_intersections = intersections
+                root_cluster = cluster
+
+        nodes, preds = sp.breadth_first_order(
+            self.cluster_graph,
+            self.sim.clusters.index(root_cluster),
+            return_predecessors=True)
 
         for node in nodes:
             parent_idx = preds[node]
             child_idx = node
             if parent_idx == -9999:
-                clusters[child_idx].mdc_speed = self.env.mdc_speed
+                self.sim.clusters[child_idx].mdc_speed = self.env.mdc_speed
             else:
-                self._set_child_speed(clusters[parent_idx],
-                                      clusters[child_idx])
+                self._set_child_speed(self.sim.clusters[parent_idx],
+                                      self.sim.clusters[child_idx])
 
     def _set_child_speed(self, parent, child):
         """
@@ -76,7 +82,36 @@ class FOCUSEnergyModel(object):
         child.mdc_speed = child_speed
         logger.debug("Set %s speed to %s", child, child.mdc_speed)
 
-    def _cluster_data_volume(self, cluster_id):
+    def build_cluster_graph(self):
+
+        cluster_graph = collections.defaultdict(list)
+        for cluster in self.sim.clusters:
+
+            other_clusters = list(self.sim.clusters)
+            other_clusters.remove(cluster)
+            for other_cluster in other_clusters:
+                overlaps = set(cluster.tour.objects).intersection(
+                    other_cluster.tour.objects)
+
+                if len(overlaps) > 0:
+                    cluster_graph[cluster].append(other_cluster)
+
+        node_count = len(self.sim.clusters)
+        dense = np.zeros((node_count, node_count), dtype=float)
+
+        for cluster, neighbors in cluster_graph.items():
+
+            cluster_index = self.sim.clusters.index(cluster)
+            for neighbor in neighbors:
+                neighbor_index = self.sim.clusters.index(neighbor)
+
+                dense[cluster_index, neighbor_index] = 1
+                dense[neighbor_index, cluster_index] = 1
+
+        sparse = sp.csgraph_from_dense(dense)
+        return sparse
+
+    def cluster_data_volume(self, cluster_id):
         """
 
         :param cluster_id:
@@ -84,39 +119,75 @@ class FOCUSEnergyModel(object):
         :rtype: pq.bit
         """
 
-        cluster = self._find_cluster(cluster_id)
+        current_cluster = self._find_cluster(cluster_id)
+        cluster_index = self.sim.clusters.index(current_cluster)
+        cluster_tree, preds = sp.breadth_first_order(self.cluster_graph,
+                                                     cluster_index,
+                                                     directed=False,
+                                                     return_predecessors=True)
 
-        if not cluster.nodes:
-            return 0 * pq.bit
+        children_indexes = list()
+        for index in cluster_tree:
+            if preds[index] == cluster_index:
+                children_indexes.append(index)
 
-        # Handle all intra-cluster data
-        cluster_segs = cluster.nodes
-        intracluster_seg_pairs = [(src, dst) for src in cluster_segs for dst in
-                                  cluster_segs if src != dst]
-        data_vol = np.sum([core.data.segment_volume(src, dst) for src, dst in
-                           intracluster_seg_pairs]) * pq.bit
+        cluster_graph = self.cluster_graph.toarray()
+        cluster_graph[cluster_index] = 0
+        cluster_graph[:, cluster_index] = 0
 
-        # Handle inter-cluster data at the rendezvous point
-        all_segments = self.sim.segments
-        other_segs = [c for c in all_segments if
-                      c.cluster_id != cluster.cluster_id]
-        intercluster_seg_pairs = [(src, dst) for src in cluster_segs for dst in
-                                  other_segs]
-        intercluster_seg_pairs += [(src, dst) for src in other_segs for dst in
-                                   cluster_segs]
+        components_count, labels = sp.connected_components(cluster_graph,
+                                                           directed=False)
 
-        # data segment_volume for inter-cluster traffic
-        data_vol += np.sum([core.data.segment_volume(src, dst) for src, dst in
-                            intercluster_seg_pairs]) * pq.bit
+        cluster_groups = collections.defaultdict(list)
+        for index, label in enumerate(labels):
+            if index == cluster_index:
+                continue
 
-        return data_vol
+            cluster_groups[label].append(self.sim.clusters[index])
+
+        # Build a set of "super clusters." These are just collections of all
+        # segments from the clusters that make up each child branch from the
+        # current cluster.
+        super_clusters = collections.defaultdict(list)
+        for label, clusters in cluster_groups.items():
+            for cluster in clusters:
+                super_clusters[label].extend(cluster.tour.objects)
+
+        # Now, we get the list of segment pairs that will communicate through
+        # the current cluster. This does not include the segments within the
+        # current cluster, as those will be accounted for separately.
+        sc_index_pairs = itertools.permutations(super_clusters.keys(), 2)
+        segment_pairs = list()
+        for src_sc_index, dst_sc_index in sc_index_pairs:
+            src_segments = super_clusters[src_sc_index]
+            dst_segments = super_clusters[dst_sc_index]
+            segment_pairs.extend(
+                list(itertools.product(src_segments, dst_segments)))
+
+        intercluster_volume = np.sum([segment_volume(src, dst)
+                                      for src, dst in segment_pairs]) * pq.bit
+
+        # NOW we calculate the intra-cluster volume
+        segment_pairs = itertools.permutations(current_cluster.tour.objects, 2)
+        intracluster_volume = np.sum([segment_volume(src, dst)
+                                      for src, dst in segment_pairs]) * pq.bit
+
+        # ... and the outgoing data volume from this cluster
+        other_segments = list(
+            set(self.sim.segments) - set(current_cluster.tour.objects))
+        segment_pairs = itertools.product(current_cluster.tour.objects,
+                                          other_segments)
+        intercluster_volume += np.sum([segment_volume(*pair)
+                                       for pair in segment_pairs]) * pq.bit
+
+        return intercluster_volume + intracluster_volume
 
     def total_comms_energy(self, cluster_id):
 
         if cluster_id in self._ids_to_comms_energy:
             return self._ids_to_comms_energy[cluster_id]
 
-        data_volume = self._cluster_data_volume(cluster_id)
+        data_volume = self.cluster_data_volume(cluster_id)
         energy = data_volume * self.env.comms_cost
         self._ids_to_comms_energy[cluster_id] = energy
 

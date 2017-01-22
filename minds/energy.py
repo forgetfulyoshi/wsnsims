@@ -1,4 +1,5 @@
 import collections
+import logging
 
 import itertools
 import quantities as pq
@@ -6,7 +7,9 @@ import numpy as np
 import scipy.sparse.csgraph as sp
 
 import core.environment
-import core.data
+from core.data import segment_volume
+
+logger = logging.getLogger(__name__)
 
 
 class MINDSEnergyModelError(Exception):
@@ -18,7 +21,7 @@ class MINDSEnergyModel(object):
         """
 
         :param clust:
-        :type simulation_data: tocs.tocs_sim.TOCS
+        :type simulation_data: minds.minds_sim.MINDS
         """
 
         self.sim = simulation_data
@@ -37,7 +40,10 @@ class MINDSEnergyModel(object):
             other_clusters = list(self.sim.clusters)
             other_clusters.remove(cluster)
             for other_cluster in other_clusters:
-                if other_cluster.relay_node == cluster.relay_node:
+                overlaps = set(cluster.tour.objects).intersection(
+                    other_cluster.tour.objects)
+
+                if len(overlaps) > 0:
                     cluster_graph[cluster].append(other_cluster)
 
         node_count = len(self.sim.clusters)
@@ -55,27 +61,7 @@ class MINDSEnergyModel(object):
         sparse = sp.csgraph_from_dense(dense)
         return sparse
 
-    def sum_cluster_volume(self, parent, cluster):
-
-        children = list()
-        for other_cluster in self.sim.clusters:
-            if other_cluster == parent:
-                continue
-
-            if other_cluster.relay_node == cluster.relay_node:
-                children.append(other_cluster)
-
-        child_pairs = list()
-        for child in children:
-            child_pairs.append(self.sum_cluster_volume(cluster, child))
-
-        # All inter-cluster pairs for this cluster
-        other_segments = list(set(self.sim.segments) - set(cluster.nodes))
-        segment_pairs = list(itertools.permutations(other_))
-
-
-
-    def _cluster_data_volume(self, cluster_id):
+    def cluster_data_volume(self, cluster_id):
         """
 
         :param cluster_id:
@@ -83,21 +69,75 @@ class MINDSEnergyModel(object):
         :rtype: pq.bit
         """
 
-        cluster = self._find_cluster(cluster_id)
-        cluster_index = self.sim.clusters.index(cluster)
+        current_cluster = self._find_cluster(cluster_id)
+        cluster_index = self.sim.clusters.index(current_cluster)
         cluster_tree, preds = sp.breadth_first_order(self.cluster_graph,
                                                      cluster_index,
                                                      directed=False,
                                                      return_predecessors=True)
 
+        children_indexes = list()
+        for index in cluster_tree:
+            if preds[index] == cluster_index:
+                children_indexes.append(index)
 
+        cluster_graph = self.cluster_graph.toarray()
+        cluster_graph[cluster_index] = 0
+        cluster_graph[:, cluster_index] = 0
+
+        components_count, labels = sp.connected_components(cluster_graph,
+                                                           directed=False)
+
+        cluster_groups = collections.defaultdict(list)
+        for index, label in enumerate(labels):
+            if index == cluster_index:
+                continue
+
+            cluster_groups[label].append(self.sim.clusters[index])
+
+        # Build a set of "super clusters." These are just collections of all
+        # segments from the clusters that make up each child branch from the
+        # current cluster.
+        super_clusters = collections.defaultdict(list)
+        for label, clusters in cluster_groups.items():
+            for cluster in clusters:
+                super_clusters[label].extend(cluster.tour.objects)
+
+        # Now, we get the list of segment pairs that will communicate through
+        # the current cluster. This does not include the segments within the
+        # current cluster, as those will be accounted for separately.
+        sc_index_pairs = itertools.permutations(super_clusters.keys(), 2)
+        segment_pairs = list()
+        for src_sc_index, dst_sc_index in sc_index_pairs:
+            src_segments = super_clusters[src_sc_index]
+            dst_segments = super_clusters[dst_sc_index]
+            segment_pairs.extend(
+                list(itertools.product(src_segments, dst_segments)))
+
+        intercluster_volume = np.sum([segment_volume(src, dst)
+                                      for src, dst in segment_pairs]) * pq.bit
+
+        # NOW we calculate the intra-cluster volume
+        segment_pairs = itertools.permutations(current_cluster.tour.objects, 2)
+        intracluster_volume = np.sum([segment_volume(src, dst)
+                                      for src, dst in segment_pairs]) * pq.bit
+
+        # ... and the outgoing data volume from this cluster
+        other_segments = list(
+            set(self.sim.segments) - set(current_cluster.tour.objects))
+        segment_pairs = itertools.product(current_cluster.tour.objects,
+                                          other_segments)
+        intercluster_volume += np.sum([segment_volume(*pair)
+                                       for pair in segment_pairs]) * pq.bit
+
+        return intercluster_volume + intracluster_volume
 
     def total_comms_energy(self, cluster_id):
 
         if cluster_id in self._ids_to_comms_energy:
             return self._ids_to_comms_energy[cluster_id]
 
-        data_volume = self._cluster_data_volume(cluster_id)
+        data_volume = self.cluster_data_volume(cluster_id)
         energy = data_volume * self.env.comms_cost
         self._ids_to_comms_energy[cluster_id] = energy
 

@@ -25,7 +25,7 @@ class ToCSEnergyModel(object):
         self._ids_to_movement_energy = {}
         self._ids_to_comms_energy = {}
 
-    def _cluster_data_volume(self, cluster_id):
+    def cluster_data_volume(self, cluster_id):
         """
 
         :param cluster_id:
@@ -57,7 +57,7 @@ class ToCSEnergyModel(object):
         total_volume = internal_volume + external_volume
         return total_volume
 
-    def _centroid_data_volume(self, cluster_id):
+    def centroid_data_volume(self, cluster_id):
         """
 
         :param cluster_id:
@@ -99,9 +99,9 @@ class ToCSEnergyModel(object):
             return self._ids_to_comms_energy[cluster_id]
 
         if cluster_id == self.sim.centroid.cluster_id:
-            data_volume = self._centroid_data_volume(cluster_id)
+            data_volume = self.centroid_data_volume(cluster_id)
         else:
-            data_volume = self._cluster_data_volume(cluster_id)
+            data_volume = self.cluster_data_volume(cluster_id)
 
         energy = data_volume * self.env.comms_cost
         self._ids_to_comms_energy[cluster_id] = energy

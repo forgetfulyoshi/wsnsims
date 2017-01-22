@@ -1,8 +1,12 @@
+import logging
+
 import quantities as pq
 import numpy as np
 import scipy.sparse.csgraph as sp
 
 from core import environment
+
+logger = logging.getLogger(__name__)
 
 
 class MINDSMovementError(Exception):
@@ -37,17 +41,17 @@ class MINDSMovementModel(object):
         :return: None
         """
 
-        # for clust in self.sim.clusters + [self.sim.centroid]:
-        #     route = clust.tour
+        # for cluster in self.sim.clusters + [self.sim.centroid]:
+        #     route = cluster.tour
         #     assert not np.any(np.isinf(route.collection_points))
 
         # for i, seg in enumerate(self.sim.segments + self.sim.centroid.segments):
         #     self._segment_indexes[seg] = i
 
         i = 0
-        for clust in self.sim.clusters:
-            for seg_vertex in clust.tour.vertices:
-                seg = clust.tour.objects[seg_vertex]
+        for cluster in self.sim.clusters:
+            for seg_vertex in cluster.tour.vertices:
+                seg = cluster.tour.objects[seg_vertex]
                 if seg not in self._segment_indexes:
                     self._segment_indexes[seg] = i
                     i += 1
@@ -61,8 +65,8 @@ class MINDSMovementModel(object):
         g_sparse = np.zeros((node_count, node_count), dtype=float)
         g_sparse[:] = np.inf
 
-        for clust in self.sim.clusters:
-            cluster_tour = clust.tour
+        for cluster in self.sim.clusters:
+            cluster_tour = cluster.tour
             i = len(cluster_tour.vertices) - 1
             j = 0
             while j < len(cluster_tour.vertices):
@@ -97,7 +101,7 @@ class MINDSMovementModel(object):
         """
 
         distance_mat, preds = sp.dijkstra(self._adj_mat, directed=True,
-                                   return_predecessors=True)
+                                          return_predecessors=True)
         # assert not np.any(np.isinf(distance_mat))
         if np.any(np.isinf(distance_mat)):
             logger.debug("Found inf distance!!")
