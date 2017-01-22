@@ -7,7 +7,7 @@ import quantities as pq
 from matplotlib import path as mp
 
 import tocs.cluster
-from core import segment, linalg, environment
+from core import segment, linalg, environment, units
 from core.comparisons import much_greater_than
 from tocs.cluster import ToCSCluster, ToCSCentroid, RelayNode
 from tocs.tocs_runner import ToCSRunner
@@ -426,7 +426,8 @@ class TOCS(object):
             runner.maximum_communication_delay()))
         logger.debug("Energy balance: {}".format(runner.energy_balance()))
         logger.debug("Average energy: {}".format(runner.average_energy()))
-        logger.debug("Max buffer size: {}".format(runner.max_buffer_size()))
+        logger.debug("Max buffer size: {}".format(
+            runner.max_buffer_size().rescale(units.MB)))
         return runner
 
 

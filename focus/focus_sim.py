@@ -10,6 +10,7 @@ import scipy.sparse.csgraph as sp
 import scipy.spatial.distance as sp_dist
 from pyclustering.cluster.cure import cure as Cure
 
+from core import units
 from core.environment import Environment
 from core.segment import Segment
 from focus.cluster import FOCUSCluster
@@ -201,7 +202,8 @@ class FOCUS(object):
             runner.maximum_communication_delay()))
         logger.debug("Energy balance: {}".format(runner.energy_balance()))
         logger.debug("Average energy: {}".format(runner.average_energy()))
-        logger.debug("Max buffer size: {}".format(runner.max_buffer_size()))
+        logger.debug("Max buffer size: {}".format(
+            runner.max_buffer_size().rescale(units.MB)))
         return runner
 
 

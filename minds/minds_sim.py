@@ -8,10 +8,11 @@ import quantities as pq
 import scipy.sparse.csgraph as sp
 from scipy.sparse import csr_matrix
 
-from core import segment, environment, cluster
+from core import segment, environment, cluster, units
 from minds import minds_runner
 
 logger = logging.getLogger(__name__)
+
 
 class MINDS(object):
     def __init__(self, locs):
@@ -252,7 +253,8 @@ class MINDS(object):
             runner.maximum_communication_delay()))
         logger.debug("Energy balance: {}".format(runner.energy_balance()))
         logger.debug("Average energy: {}".format(runner.average_energy()))
-        logger.debug("Max buffer size: {}".format(runner.max_buffer_size()))
+        logger.debug("Max buffer size: {}".format(
+            runner.max_buffer_size().rescale(units.MB)))
         return runner
 
 

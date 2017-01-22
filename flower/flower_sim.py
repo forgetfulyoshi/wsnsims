@@ -14,6 +14,7 @@ from flower import flower_runner
 from tocs.cluster import combine_clusters
 from core import environment
 from core import segment
+from core import units
 from core.cluster import closest_nodes
 from core.comparisons import much_greater_than
 from flower import grid
@@ -607,7 +608,8 @@ class FLOWER(object):
             runner.maximum_communication_delay()))
         logger.debug("Energy balance: {}".format(runner.energy_balance()))
         logger.debug("Average energy: {}".format(runner.average_energy()))
-        logger.debug("Max buffer size: {}".format(runner.max_buffer_size()))
+        logger.debug("Max buffer size: {}".format(
+            runner.max_buffer_size().rescale(units.MB)))
         return runner
 
 
