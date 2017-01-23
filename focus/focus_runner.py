@@ -13,19 +13,21 @@ logger = logging.getLogger(__name__)
 
 
 class FOCUSRunner(object):
-    def __init__(self, sim):
+    def __init__(self, sim, environment):
         """
 
         :param sim: The simulation after a run of MINDS
         :type sim: focus.focus_sim.FOCUS
+        :param environment:
+        :type environment: core.environment.Environment
         """
 
         #: The simulation segment_volume
         self.sim = sim
 
-        self.env = environment.Environment()
-        self.movement_model = FOCUSMovementModel(self.sim)
-        self.energy_model = FOCUSEnergyModel(self.sim)
+        self.env = environment
+        self.movement_model = FOCUSMovementModel(self.sim, self.env)
+        self.energy_model = FOCUSEnergyModel(self.sim, self.env)
 
     def print_all_distances(self):
         """
@@ -179,7 +181,7 @@ class FOCUSRunner(object):
             travel_delay += cluster_distance / speed
 
         transmission_delay = len(path_clusters)
-        transmission_delay *= data.segment_volume(begin, end)
+        transmission_delay *= data.segment_volume(begin, end, self.env)
         transmission_delay /= self.env.comms_rate
 
         relay_delay = self.holding_time(path_clusters[1:])

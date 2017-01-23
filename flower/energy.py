@@ -1,11 +1,9 @@
 import itertools
-import collections
 
 import numpy as np
 import quantities as pq
 
 from flower.data import cell_volume
-import core.environment
 
 
 class FLOWEREnergyModelError(Exception):
@@ -13,15 +11,17 @@ class FLOWEREnergyModelError(Exception):
 
 
 class FLOWEREnergyModel(object):
-    def __init__(self, simulation_data):
+    def __init__(self, simulation_data, environment):
         """
 
         :param simulation_data:
         :type simulation_data: flower.flower_sim.FlowerSim
+        :param environment:
+        :type environment: core.environment.Environment
         """
 
         self.sim = simulation_data
-        self.env = core.environment.Environment()
+        self.env = environment
 
     def cluster_data_volume(self, cluster, intercluster_only=False):
         """
@@ -36,7 +36,7 @@ class FLOWEREnergyModel(object):
             # Handle the intra-cluster data volume
             cell_pairs = itertools.permutations(cluster.cells, 2)
             internal_volume = np.sum(
-                [cell_volume(*pair) for pair in cell_pairs]) * pq.bit
+                [cell_volume(s, d, self.env) for s, d in cell_pairs]) * pq.bit
         else:
             internal_volume = 0. * pq.bit
 
@@ -48,7 +48,7 @@ class FLOWEREnergyModel(object):
         # Incoming data ...
         cell_pairs += list(itertools.product(external_cells, cluster.cells))
         external_volume = np.sum(
-            [cell_volume(*pair) for pair in cell_pairs]) * pq.bit
+            [cell_volume(s, d, self.env) for s, d in cell_pairs]) * pq.bit
 
         total_volume = internal_volume + external_volume
         return total_volume

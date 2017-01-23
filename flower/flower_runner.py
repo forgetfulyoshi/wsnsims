@@ -1,10 +1,8 @@
-import itertools
 import logging
 
 import numpy as np
 import quantities as pq
 
-from core import environment
 from flower import data
 from flower.energy import FLOWEREnergyModel
 from flower.movement import FLOWERMovementModel
@@ -17,19 +15,20 @@ class FLOWERRunnerError(Exception):
 
 
 class FLOWERRunner(object):
-    def __init__(self, sim):
+    def __init__(self, sim, environment):
         """
 
         :param sim: The simulation after a run of ToCS
         :type sim: flower.flower_sim.FlowerSim
+        :param environment:
+        :type environment: core.environment.Environment
         """
 
-        #: The simulation segment_volume
         self.sim = sim
+        self.env = environment
 
-        self.env = environment.Environment()
-        self.movement_model = FLOWERMovementModel(self.sim)
-        self.energy_model = FLOWEREnergyModel(self.sim)
+        self.movement_model = FLOWERMovementModel(self.sim, self.env)
+        self.energy_model = FLOWEREnergyModel(self.sim, self.env)
 
     def maximum_communication_delay(self):
         """
@@ -88,7 +87,7 @@ class FLOWERRunner(object):
             transmission_count = 3
 
         transmission_delay = transmission_count
-        transmission_delay *= data.cell_volume(begin, end)
+        transmission_delay *= data.cell_volume(begin, end, self.env)
         transmission_delay /= self.env.comms_rate
 
         relay_delay = self.holding_time(begin, end)

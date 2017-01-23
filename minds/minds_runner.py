@@ -1,12 +1,10 @@
-import collections
 import itertools
 import logging
 
 import numpy as np
 import quantities as pq
-import scipy.sparse.csgraph as sp
 
-from core import data, environment, orderedset
+from core import data, orderedset
 from minds.energy import MINDSEnergyModel
 from minds.movement import MINDSMovementModel
 
@@ -14,19 +12,21 @@ logger = logging.getLogger(__name__)
 
 
 class MINDSRunner(object):
-    def __init__(self, sim):
+    def __init__(self, sim, environment):
         """
 
         :param sim: The simulation after a run of MINDS
         :type sim: minds.minds_sim.MINDS
+        :param environment:
+        :type environment: core.environment.Environment
         """
 
         #: The simulation segment_volume
         self.sim = sim
 
-        self.env = environment.Environment()
-        self.movement_model = MINDSMovementModel(self.sim)
-        self.energy_model = MINDSEnergyModel(self.sim)
+        self.env = environment
+        self.movement_model = MINDSMovementModel(self.sim, self.env)
+        self.energy_model = MINDSEnergyModel(self.sim, self.env)
 
     def print_all_distances(self):
         """
@@ -152,7 +152,7 @@ class MINDSRunner(object):
         path_clusters = self.count_clusters(path)
 
         transmission_delay = len(path_clusters)
-        transmission_delay *= data.segment_volume(begin, end)
+        transmission_delay *= data.segment_volume(begin, end, self.env)
         transmission_delay /= self.env.comms_rate
 
         relay_delay = self.holding_time(path_clusters[1:])

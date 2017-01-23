@@ -10,8 +10,13 @@ logger = logging.getLogger(__name__)
 
 
 class ToCSCluster(BaseCluster):
-    def __init__(self):
-        super(ToCSCluster, self).__init__()
+    def __init__(self, environment):
+        """
+
+        :param environment:
+        :type environment: core.environment.Environment
+        """
+        super(ToCSCluster, self).__init__(environment)
 
     @property
     def rendezvous_point(self):
@@ -37,8 +42,13 @@ class ToCSCluster(BaseCluster):
 
 
 class ToCSCentroid(ToCSCluster):
-    def __init__(self):
-        super(ToCSCentroid, self).__init__()
+    def __init__(self, environment):
+        """
+
+        :param environment:
+        :type environment: core.environment.Environment
+        """
+        super(ToCSCentroid, self).__init__(environment)
         self._radio_range = 0. * pq.meter
         self._segments = []
 
@@ -94,6 +104,12 @@ class ToCSCentroid(ToCSCluster):
 
 
 def combine_clusters(clusters, centroid):
+    """
+
+    :param clusters:
+    :param centroid:
+    :return:
+    """
     index = 0
     decorated = list()
 

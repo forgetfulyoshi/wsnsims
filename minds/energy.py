@@ -1,14 +1,11 @@
 import collections
+import itertools
 import logging
 
-import itertools
-from code import interact
-
-import quantities as pq
 import numpy as np
+import quantities as pq
 import scipy.sparse.csgraph as sp
 
-import core.environment
 from core.data import segment_volume
 
 logger = logging.getLogger(__name__)
@@ -19,15 +16,17 @@ class MINDSEnergyModelError(Exception):
 
 
 class MINDSEnergyModel(object):
-    def __init__(self, simulation_data):
+    def __init__(self, simulation_data, environment):
         """
 
-        :param clust:
+        :param simulation_data:
         :type simulation_data: minds.minds_sim.MINDS
+        :param environment:
+        :type environment: core.environment.Environment
         """
 
         self.sim = simulation_data
-        self.env = core.environment.Environment()
+        self.env = environment
         self.cluster_graph = self.build_cluster_graph()
 
         self._ids_to_clusters = {}
@@ -67,6 +66,7 @@ class MINDSEnergyModel(object):
         """
 
         :param cluster_id:
+        :param intercluster_only:
         :return:
         :rtype: pq.bit
         """
@@ -116,14 +116,16 @@ class MINDSEnergyModel(object):
             segment_pairs.extend(
                 list(itertools.product(src_segments, dst_segments)))
 
-        intercluster_volume = np.sum([segment_volume(src, dst)
+        intercluster_volume = np.sum([segment_volume(src, dst, self.env)
                                       for src, dst in segment_pairs]) * pq.bit
 
         if not intercluster_only:
             # NOW we calculate the intra-cluster volume
-            segment_pairs = itertools.permutations(current_cluster.tour.objects, 2)
-            intracluster_volume = np.sum([segment_volume(src, dst)
-                                          for src, dst in segment_pairs]) * pq.bit
+            segment_pairs = itertools.permutations(
+                current_cluster.tour.objects, 2)
+            intracluster_volume = np.sum([segment_volume(src, dst, self.env)
+                                          for src, dst in
+                                          segment_pairs]) * pq.bit
         else:
             intracluster_volume = 0 * pq.bit
 
@@ -132,8 +134,8 @@ class MINDSEnergyModel(object):
             set(self.sim.segments) - set(current_cluster.tour.objects))
         segment_pairs = itertools.product(current_cluster.tour.objects,
                                           other_segments)
-        intercluster_volume += np.sum([segment_volume(*pair)
-                                       for pair in segment_pairs]) * pq.bit
+        intercluster_volume += np.sum([segment_volume(s, d, self.env)
+                                       for s, d in segment_pairs]) * pq.bit
 
         return intercluster_volume + intracluster_volume
 

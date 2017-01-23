@@ -1,10 +1,8 @@
 import logging
 
-import quantities as pq
 import numpy as np
+import quantities as pq
 import scipy.sparse.csgraph as sp
-
-from core import environment
 
 logger = logging.getLogger(__name__)
 
@@ -14,14 +12,16 @@ class MINDSMovementError(Exception):
 
 
 class MINDSMovementModel(object):
-    def __init__(self, simulation_data):
+    def __init__(self, simulation_data, environment):
         """
 
         :param simulation_data:
         :type simulation_data: minds.minds_sim.MINDS
+        :param environment:
+        :type environment: core.environment.Environment
         """
         self.sim = simulation_data
-        self.env = environment.Environment()
+        self.env = environment
 
         self._segment_indexes = {}
 
@@ -40,13 +40,6 @@ class MINDSMovementModel(object):
 
         :return: None
         """
-
-        # for cluster in self.sim.clusters + [self.sim.centroid]:
-        #     route = cluster.tour
-        #     assert not np.any(np.isinf(route.collection_points))
-
-        # for i, seg in enumerate(self.sim.segments + self.sim.centroid.segments):
-        #     self._segment_indexes[seg] = i
 
         i = 0
         for cluster in self.sim.clusters:

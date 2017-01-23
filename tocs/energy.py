@@ -1,8 +1,8 @@
 import itertools
-import quantities as pq
-import numpy as np
 
-import core.environment
+import numpy as np
+import quantities as pq
+
 from core.data import segment_volume
 
 
@@ -11,15 +11,17 @@ class ToCSEnergyModelError(Exception):
 
 
 class ToCSEnergyModel(object):
-    def __init__(self, simulation_data):
+    def __init__(self, simulation_data, environment):
         """
 
-        :param clust:
+        :param simulation_data:
         :type simulation_data: tocs.tocs_sim.TOCS
+        :param environment:
+        :type environment: core.environment.Environment
         """
 
         self.sim = simulation_data
-        self.env = core.environment.Environment()
+        self.env = environment
 
         self._ids_to_clusters = {}
         self._ids_to_movement_energy = {}
@@ -29,6 +31,7 @@ class ToCSEnergyModel(object):
         """
 
         :param cluster_id:
+        :param intercluster_only:
         :return:
         :rtype: pq.bit
         """
@@ -39,7 +42,7 @@ class ToCSEnergyModel(object):
             # Handle the intra-cluster data volume
             segment_pairs = itertools.permutations(cluster.segments, 2)
             internal_volume = np.sum(
-                [segment_volume(*pair) for pair in segment_pairs]) * pq.bit
+                [segment_volume(s, d, self.env) for s, d in segment_pairs]) * pq.bit
         else:
             internal_volume = 0 * pq.bit
 
@@ -55,7 +58,7 @@ class ToCSEnergyModel(object):
         segment_pairs += list(
             itertools.product(external_segments, cluster.segments))
         external_volume = np.sum(
-            [segment_volume(*pair) for pair in segment_pairs]) * pq.bit
+            [segment_volume(s, d, self.env) for s, d in segment_pairs]) * pq.bit
 
         total_volume = internal_volume + external_volume
         return total_volume
@@ -72,7 +75,8 @@ class ToCSEnergyModel(object):
 
         # Handle the intra-centroid data volume
         segment_pairs = itertools.permutations(centroid.segments, 2)
-        volume = np.sum([segment_volume(*pair) for pair in segment_pairs]) * pq.bit
+        volume = np.sum(
+            [segment_volume(*pair) for pair in segment_pairs]) * pq.bit
 
         cluster_pairs = list()
         # Handle the incoming volume from each cluster
@@ -92,7 +96,7 @@ class ToCSEnergyModel(object):
 
             segment_pairs = itertools.product(src_segments, dst_segments)
             volume += np.sum(
-                [segment_volume(*pair) for pair in segment_pairs]) * pq.bit
+                [segment_volume(s, d, self.env) for s, d in segment_pairs]) * pq.bit
 
         return volume
 

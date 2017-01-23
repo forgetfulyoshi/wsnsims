@@ -1,11 +1,9 @@
+import itertools
 import logging
 
-import itertools
-import quantities as pq
 import numpy as np
+import quantities as pq
 import scipy.sparse.csgraph as sp
-
-from core import environment
 
 logger = logging.getLogger(__name__)
 
@@ -15,9 +13,9 @@ class FLOWERMovementError(Exception):
 
 
 class FLOWERMovementModel(object):
-    def __init__(self, simulation_data):
+    def __init__(self, simulation_data, environment):
         self.sim = simulation_data
-        self.env = environment.Environment()
+        self.env = environment
 
         self._segment_indexes = {}
 

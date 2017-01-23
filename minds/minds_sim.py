@@ -8,16 +8,23 @@ import quantities as pq
 import scipy.sparse.csgraph as sp
 from scipy.sparse import csr_matrix
 
-from core import segment, environment, cluster, units
+from core.environment import Environment
+from core import segment, cluster, units
 from minds import minds_runner
 
 logger = logging.getLogger(__name__)
 
 
 class MINDS(object):
-    def __init__(self, locs):
+    def __init__(self, environment):
+        """
+
+        :param environment:
+        :type environment: core.environment.Environment
+        """
+        self.env = environment
+        locs = np.random.rand(self.env.segment_count, 2) * self.env.grid_height
         self.segments = [segment.Segment(nd) for nd in locs]
-        self.env = environment.Environment()
 
         self.clusters = []
 
@@ -84,7 +91,7 @@ class MINDS(object):
         return g_sparse
 
     def build_cluster(self, segment_ids, relay):
-        new_cluster = cluster.BaseCluster()
+        new_cluster = cluster.BaseCluster(self.env)
 
         for seg in segment_ids:
             new_cluster.add(self.segments[seg])
@@ -248,7 +255,7 @@ class MINDS(object):
         :rtype: minds.minds_runner.MINDSRunner
         """
         sim = self.compute_paths()
-        runner = minds_runner.MINDSRunner(sim)
+        runner = minds_runner.MINDSRunner(sim, self.env)
         logger.debug("Maximum comms delay: {}".format(
             runner.maximum_communication_delay()))
         logger.debug("Energy balance: {}".format(runner.energy_balance()))
@@ -259,7 +266,7 @@ class MINDS(object):
 
 
 def main():
-    env = environment.Environment()
+    env = Environment()
     seed = int(time.time())
 
     # General testing ...
@@ -273,8 +280,7 @@ def main():
 
     logger.debug("Random seed is %s", seed)
     np.random.seed(seed)
-    locs = np.random.rand(env.segment_count, 2) * env.grid_height
-    sim = MINDS(locs)
+    sim = MINDS(env)
     sim.run()
 
 

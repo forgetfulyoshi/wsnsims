@@ -20,9 +20,17 @@ logger = logging.getLogger(__name__)
 
 
 class FOCUS(object):
-    def __init__(self, locs):
+    def __init__(self, environment):
+        """
+
+        :param environment:
+        :type environment: core.environment.Environment
+        """
+        self.env = environment
+
+        locs = np.random.rand(self.env.segment_count, 2) * self.env.grid_height
         self.segments = [Segment(nd) for nd in locs]
-        self.env = Environment()
+
         self.clusters = list()  # type: typing.List[FOCUSCluster]
 
     def show_state(self):
@@ -84,7 +92,7 @@ class FOCUS(object):
             segment_clusters.append(segment_cluster)
 
         for segment_cluster in segment_clusters:
-            new_cluster = FOCUSCluster()
+            new_cluster = FOCUSCluster(self.env)
             for segment in segment_cluster:
                 new_cluster.add(segment)
 
@@ -197,7 +205,7 @@ class FOCUS(object):
         :rtype: focus.focus_runner.FOCUSRunner
         """
         sim = self.compute_paths()
-        runner = FOCUSRunner(sim)
+        runner = FOCUSRunner(sim, self.env)
         logger.debug("Maximum comms delay: {}".format(
             runner.maximum_communication_delay()))
         logger.debug("Energy balance: {}".format(runner.energy_balance()))
@@ -218,8 +226,8 @@ def main():
 
     logger.debug("Random seed is %s", seed)
     np.random.seed(seed)
-    locs = np.random.rand(env.segment_count, 2) * env.grid_height
-    sim = FOCUS(locs)
+
+    sim = FOCUS(env)
     sim.run()
 
 

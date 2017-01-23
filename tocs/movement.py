@@ -1,18 +1,23 @@
-import quantities as pq
+import logging
+
 import numpy as np
+import quantities as pq
 import scipy.sparse.csgraph as sp
 
-from core import environment
-
-
-class ToCSMovementError(Exception):
-    pass
+logger = logging.getLogger(__name__)
 
 
 class ToCSMovementModel(object):
-    def __init__(self, simulation_data):
+    def __init__(self, simulation_data, environment):
+        """
+
+        :param simulation_data:
+        :type simulation_data: tocs.tocs_sim.TOCS
+        :param environment:
+        :type environment: core.environment.Environment
+        """
         self.sim = simulation_data
-        self.env = environment.Environment()
+        self.env = environment
 
         self._segment_indexes = {}
 
@@ -31,13 +36,6 @@ class ToCSMovementModel(object):
 
         :return: None
         """
-
-        # for clust in self.sim.clusters + [self.sim.centroid]:
-        #     route = clust.tour
-        #     assert not np.any(np.isinf(route.collection_points))
-
-        # for i, seg in enumerate(self.sim.segments + self.sim.centroid.segments):
-        #     self._segment_indexes[seg] = i
 
         i = 0
         for clust in self.sim.clusters + [self.sim.centroid]:

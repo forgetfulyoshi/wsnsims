@@ -5,8 +5,7 @@ import logging
 
 import numpy as np
 
-from core import environment
-from flower.cell import Cell
+from flower.cell import Cell, side_length
 
 logger = logging.getLogger(__name__)
 
@@ -14,17 +13,19 @@ logger = logging.getLogger(__name__)
 class Grid(object):
     """ Define the simulation grid """
 
-    def __init__(self, segments):
+    def __init__(self, segments, environment):
         """
 
         :param segments:
         :type segments: np.array
+        :param environment:
+        :type environment: core.environment.Environment
         """
         self.segments = segments
         self.rows = 0
         self.cols = 0
 
-        self._env = environment.Environment()
+        self._env = environment
         self.width = self._env.grid_width
         self.height = self._env.grid_height
 
@@ -32,27 +33,28 @@ class Grid(object):
         self._layout_cells()
 
     def _layout_cells(self):
-        logger.debug("Cell side length: %s", Cell.side_len)
+        side_len = side_length(self._env)
+        logger.debug("Cell side length: %s", side_len)
         logger.debug("Original dimensions: %s x %s", self.width, self.height)
 
         # First, adjust the physical size of the grid to accommodate whole
         # cells. This keeps us from having partial cells in the simulation.
-        self.width = np.round(self.width / Cell.side_len) * Cell.side_len
-        self.height = np.round(self.height / Cell.side_len) * Cell.side_len
+        self.width = np.round(self.width / side_len) * side_len
+        self.height = np.round(self.height / side_len) * side_len
 
         logger.debug("Adjusted dimensions: %s x %s", self.width, self.height)
 
         # Now, calculate the number of cells per row and column. This also
         # makes the row and column counts unit-less.
-        self.rows = int(self.height / Cell.side_len)
-        self.cols = int(self.width / Cell.side_len)
+        self.rows = int(self.height / side_len)
+        self.cols = int(self.width / side_len)
 
         # Initialize the grid
         self._grid = list()
         for row in range(self.rows):
             new_row = list()
             for col in range(self.cols):
-                new_cell = Cell(row, col)
+                new_cell = Cell(row, col, self._env)
                 new_row.append(new_cell)
 
             self._grid.append(new_row)

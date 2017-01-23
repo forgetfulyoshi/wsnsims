@@ -1,6 +1,6 @@
 import logging
-import typing
 import time
+import typing
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -8,7 +8,8 @@ import quantities as pq
 from matplotlib import path as mp
 
 import tocs.cluster
-from core import segment, linalg, environment, units
+from core.environment import Environment
+from core import segment, linalg, units
 from core.comparisons import much_greater_than
 from tocs.cluster import ToCSCluster, ToCSCentroid, RelayNode
 from tocs.tocs_runner import ToCSRunner
@@ -17,14 +18,20 @@ logger = logging.getLogger(__name__)
 
 
 class TOCS(object):
-    def __init__(self, locs):
+    def __init__(self, environment):
+        """
 
+        :param environment:
+        :type environment: core.environment.Environment
+        """
+
+        self.env = environment
+        locs = np.random.rand(self.env.segment_count, 2) * self.env.grid_height
         self.segments = [segment.Segment(nd) for nd in locs]
-        self.env = environment.Environment()
         self._center = linalg.centroid(locs)
 
         # Create the centroid cluster
-        self.centroid = ToCSCentroid()
+        self.centroid = ToCSCentroid(self.env)
 
         self.clusters = list()  # type: typing.List[ToCSCluster]
 
@@ -80,7 +87,7 @@ class TOCS(object):
     def create_clusters(self):
 
         for seg in self.segments:
-            clust = ToCSCluster()
+            clust = ToCSCluster(self.env)
             clust.add(seg)
             self.clusters.append(clust)
 
@@ -422,7 +429,7 @@ class TOCS(object):
         :rtype: tocs.tocs_runner.ToCSRunner
         """
         sim = self.compute_paths()
-        runner = ToCSRunner(sim)
+        runner = ToCSRunner(sim, self.env)
         logger.debug("Maximum comms delay: {}".format(
             runner.maximum_communication_delay()))
         logger.debug("Energy balance: {}".format(runner.energy_balance()))
@@ -433,7 +440,7 @@ class TOCS(object):
 
 
 def main():
-    env = environment.Environment()
+    env = Environment()
     seed = int(time.time())
 
     # General testing ...
@@ -443,8 +450,7 @@ def main():
 
     logger.debug("Random seed is %s", seed)
     np.random.seed(seed)
-    locs = np.random.rand(env.segment_count, 2) * env.grid_height
-    sim = TOCS(locs)
+    sim = TOCS(env)
     sim.run()
 
 

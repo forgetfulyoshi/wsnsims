@@ -6,8 +6,13 @@ logger = logging.getLogger(__name__)
 
 
 class FlowerCluster(BaseCluster):
-    def __init__(self):
-        super(FlowerCluster, self).__init__()
+    def __init__(self, environment):
+        """
+
+        :param environment:
+        :type environment: core.environment.Environment
+        """
+        super(FlowerCluster, self).__init__(environment)
 
         self.completed = False
         self.recent = None
@@ -76,8 +81,13 @@ class FlowerCluster(BaseCluster):
 
 
 class FlowerVirtualCluster(FlowerCluster):
-    def __init__(self):
-        super(FlowerVirtualCluster, self).__init__()
+    def __init__(self, environment):
+        """
+
+        :param environment:
+        :type environment: core.environment.Environment
+        """
+        super(FlowerVirtualCluster, self).__init__(environment)
 
     def __str__(self):
         return "Flower Virtual Cluster {}".format(self.cluster_id)
@@ -97,8 +107,13 @@ class FlowerVirtualCluster(FlowerCluster):
 
 
 class FlowerHub(FlowerCluster):
-    def __init__(self):
-        super(FlowerHub, self).__init__()
+    def __init__(self, environment):
+        """
+
+        :param environment:
+        :type environment: core.environment.Environment
+        """
+        super(FlowerHub, self).__init__(environment)
 
     def __str__(self):
         return "Flower Hub Cluster"
@@ -108,8 +123,13 @@ class FlowerHub(FlowerCluster):
 
 
 class FlowerVirtualHub(FlowerVirtualCluster):
-    def __init__(self):
-        super(FlowerVirtualHub, self).__init__()
+    def __init__(self, environment):
+        """
+
+        :param environment:
+        :type environment: core.environment.Environment
+        """
+        super(FlowerVirtualHub, self).__init__(environment)
 
     def __str__(self):
         return "Flower Virtual Hub Cluster"

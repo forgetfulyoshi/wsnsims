@@ -4,7 +4,7 @@ import logging
 import numpy as np
 import quantities as pq
 
-from core import tour, environment, linalg, point
+from core import tour, linalg, point
 from core.orderedset import OrderedSet
 
 logger = logging.getLogger(__name__)
@@ -13,7 +13,12 @@ logger = logging.getLogger(__name__)
 class BaseCluster(object):
     count = 0
 
-    def __init__(self):
+    def __init__(self, environment):
+        """
+
+        :param environment:
+        :type environment: core.environment.Environment
+        """
 
         self._cluster_id = BaseCluster.count
         BaseCluster.count += 1
@@ -32,7 +37,7 @@ class BaseCluster(object):
         self._tour = None
 
         #: The current simulation environment
-        self.env = environment.Environment()
+        self.env = environment
 
         #: The assigned cluster RN, if it exists.
         self._relay_node = None
@@ -141,8 +146,8 @@ class BaseCluster(object):
         node.cluster_id = -1
         self._invalidate_cache()
 
-    def merge(self, other, *args, **kwargs):
-        new_cluster = type(self)(*args, **kwargs)
+    def merge(self, other):
+        new_cluster = type(self)(self.env)
         new_cluster.nodes = list(OrderedSet(self.nodes + other.nodes))
         return new_cluster
 

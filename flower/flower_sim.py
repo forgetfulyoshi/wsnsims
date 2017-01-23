@@ -1,28 +1,27 @@
 """Main FLOWER simulation logic"""
 
 import logging
+import time
 import warnings
-from operator import itemgetter
 from typing import List
 
 import matplotlib.pyplot as plt
 import numpy as np
 import quantities as pq
-import time
 
-from flower import flower_runner
-from tocs.cluster import combine_clusters
-from core import environment
+from core.environment import Environment
 from core import segment
 from core import units
 from core.cluster import closest_nodes
 from core.comparisons import much_greater_than
+from flower import flower_runner
 from flower import grid
 from flower.cluster import FlowerCluster
 from flower.cluster import FlowerHub
 from flower.cluster import FlowerVirtualCluster
 from flower.cluster import FlowerVirtualHub
 from flower.energy import FLOWEREnergyModel
+from tocs.cluster import combine_clusters
 
 logger = logging.getLogger(__name__)
 warnings.filterwarnings('error')
@@ -33,18 +32,26 @@ class FlowerError(Exception):
 
 
 class FLOWER(object):
-    def __init__(self, locs):
+    def __init__(self, environment):
+        """
 
-        self.env = environment.Environment()
+        :param environment:
+        :type environment: core.environment.Environment
+        """
+
+        self.env = environment
+
+        locs = np.random.rand(self.env.segment_count, 2) * self.env.grid_height
         self.segments = [segment.Segment(loc) for loc in locs]
-        self.grid = grid.Grid(self.segments)
+
+        self.grid = grid.Grid(self.segments, self.env)
         self.cells = list(self.grid.cells())
 
         segment_centroid = np.mean(locs, axis=0).magnitude
         logger.debug("Centroid located at %s", segment_centroid)
         self.damaged = self.grid.closest_cell(segment_centroid)
 
-        self.energy_model = FLOWEREnergyModel(self)
+        self.energy_model = FLOWEREnergyModel(self, self.env)
 
         self.virtual_clusters = list()  # type: List[FlowerVirtualCluster]
         self.clusters = list()  # type: List[FlowerCluster]
@@ -52,11 +59,11 @@ class FLOWER(object):
         # Create a virtual cell to represent the center of the damaged area
         virtual_center_cell = self.damaged
 
-        self.virtual_hub = FlowerVirtualHub()
+        self.virtual_hub = FlowerVirtualHub(self.env)
         self.virtual_hub.add(virtual_center_cell)
         self.virtual_hub.cluster_id = self.env.mdc_count - 1
 
-        self.hub = FlowerHub()
+        self.hub = FlowerHub(self.env)
         self.hub.add(virtual_center_cell)
         self.hub.cluster_id = self.env.mdc_count - 1
 
@@ -224,7 +231,7 @@ class FLOWER(object):
     def create_virtual_clusters(self):
 
         for cell in self.cells:
-            c = FlowerVirtualCluster()
+            c = FlowerVirtualCluster(self.env)
             c.add(cell)
             self.virtual_clusters.append(c)
 
@@ -248,7 +255,7 @@ class FLOWER(object):
             c.cluster_id = -1
 
         for vc in self.virtual_clusters:
-            c = FlowerCluster()
+            c = FlowerCluster(self.env)
             c.cluster_id = vc.cluster_id
             c.anchor = self.damaged
 
@@ -565,7 +572,7 @@ class FLOWER(object):
         # Check for the case where Em >> Ec
         clusters = list()
         for vc in self.virtual_clusters:
-            cluster = FlowerCluster()
+            cluster = FlowerCluster(self.env)
             cluster.cluster_id = vc.cluster_id
             for cell in vc.cells:
                 cluster.add(cell)
@@ -603,7 +610,7 @@ class FLOWER(object):
 
     def run(self):
         sim = self.compute_paths()
-        runner = flower_runner.FLOWERRunner(sim)
+        runner = flower_runner.FLOWERRunner(sim, self.env)
         logger.debug("Maximum comms delay: {}".format(
             runner.maximum_communication_delay()))
         logger.debug("Energy balance: {}".format(runner.energy_balance()))
@@ -614,10 +621,8 @@ class FLOWER(object):
 
 
 def main():
-    env = environment.Environment()
+    env = Environment()
     seed = int(time.time())
-
-    seed = 1485118300
 
     # General testing ...
     # seed = 1484764250
@@ -634,8 +639,7 @@ def main():
 
     logger.debug("Random seed is %s", seed)
     np.random.seed(seed)
-    locs = np.random.rand(env.segment_count, 2) * env.grid_height
-    sim = FLOWER(locs)
+    sim = FLOWER(env)
     sim.run()
 
 

@@ -1,9 +1,7 @@
-import itertools
-
 import numpy as np
 import quantities as pq
 
-from core import data, environment
+from core import data
 from tocs.energy import ToCSEnergyModel
 from tocs.movement import ToCSMovementModel
 
@@ -13,19 +11,20 @@ class ToCSRunnerError(Exception):
 
 
 class ToCSRunner(object):
-    def __init__(self, sim):
+    def __init__(self, sim, environment):
         """
 
         :param sim: The simulation after a run of ToCS
         :type sim: tocs.tocs_sim.TOCS
+        :param environment:
+        :type environment: core.environment.Environment
         """
 
-        #: The simulation segment_volume
         self.sim = sim
 
-        self.env = environment.Environment()
-        self.movement_model = ToCSMovementModel(self.sim)
-        self.energy_model = ToCSEnergyModel(self.sim)
+        self.env = environment
+        self.movement_model = ToCSMovementModel(self.sim, self.env)
+        self.energy_model = ToCSEnergyModel(self.sim, self.env)
 
     def maximum_communication_delay(self):
         """
@@ -75,7 +74,7 @@ class ToCSRunner(object):
             transmission_count = 3
 
         transmission_delay = transmission_count
-        transmission_delay *= data.segment_volume(begin, end)
+        transmission_delay *= data.segment_volume(begin, end, self.env)
         transmission_delay /= self.env.comms_rate
 
         relay_delay = self.holding_time(begin, end)

@@ -1,15 +1,12 @@
 import numpy as np
 
-from core import environment
-
 data_memo = {}
 
 
-def segment_volume(src, dst):
+def segment_volume(src, dst, env):
     if (src, dst) in data_memo:
         return data_memo[(src, dst)]
 
-    env = environment.Environment()
     size = np.random.normal(env.isdva, env.isdvsd)
     size *= env.isdva.units
     data_memo[(src, dst)] = size

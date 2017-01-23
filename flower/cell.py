@@ -1,16 +1,34 @@
 import numpy as np
 import quantities as pq
 
-from core import environment, point
+from core import point
+
+
+def side_length(environment):
+    """
+
+    :param environment:
+    :type environment: core.environment.Environment
+    :return: pq.meter
+    """
+
+    return environment.comms_range / np.sqrt(2)
 
 
 class Cell(object):
     """ Defines a cell in the grid """
 
     count = 0
-    side_len = environment.Environment().comms_range / np.sqrt(2)
 
-    def __init__(self, row, column):
+    def __init__(self, row, column, environment):
+        """
+
+        :param row:
+        :param column:
+        :param environment:
+        :type environment: core.environment.Environment
+        """
+
         self.cell_id = Cell.count
         Cell.count += 1
 
@@ -18,8 +36,9 @@ class Cell(object):
         self.grid_location = np.array([row, column])
 
         # Calculate the physical location of the center of this cell.
-        x_pos = column * Cell.side_len + (Cell.side_len / 2.)
-        y_pos = row * Cell.side_len + (Cell.side_len / 2.)
+        side_len = side_length(environment)
+        x_pos = column * side_len + (side_len / 2.)
+        y_pos = row * side_len + (side_len / 2.)
         self.location = point.Vec2(np.array([x_pos, y_pos]) * pq.meter)
 
         # The segments within radio range of this cell.
