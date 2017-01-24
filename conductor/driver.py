@@ -17,10 +17,11 @@ from focus.focus_sim import FOCUS
 from minds.minds_sim import MINDS
 from tocs.tocs_sim import TOCS
 
-logging.basicConfig(level=logging.ERROR)
+logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger(__name__)
 
-RUNS = 1
+MAX_PROCESSES = 8
+RUNS = 30
 
 Parameters = namedtuple('Parameters',
                         ['segment_count', 'mdc_count', 'isdva', 'isdvsd',
@@ -39,17 +40,25 @@ def average_results(results):
     return result
 
 
-# logger.debug("Maximum comms delay: {}".format(
-#     runner.maximum_communication_delay()))
-# logger.debug("Energy balance: {}".format(runner.energy_balance()))
-# logger.debug("Average energy: {}".format(runner.average_energy()))
-# logger.debug("Max buffer size: {}".format(runner.max_buffer_size()))
+def run_tocs(parameters):
+    """
 
-def run_tocs(parameters, locs):
-    tocs_sim = TOCS(locs)
-    logger.debug(
+    :param parameters:
+    :type parameters: Parameters
+    :return:
+    """
+
+    env = Environment()
+    env.segment_count = parameters.segment_count
+    env.mdc_count = parameters.mdc_count
+    env.isdva = parameters.isdva * pq.mebi * pq.bit
+    env.isdvsd = parameters.isdvsd
+    env.comms_range = parameters.radio_range * env.comms_range.units
+    tocs_sim = TOCS(env)
+
+    print(
         "Starting ToCS at {}".format(datetime.datetime.now().isoformat()))
-    logger.debug("Using {}".format(parameters))
+    print("Using {}".format(parameters))
     start = time.time()
     runner = tocs_sim.run()
 
@@ -59,15 +68,29 @@ def run_tocs(parameters, locs):
                       runner.average_energy(),
                       runner.max_buffer_size())
 
-    logger.debug("Finished ToCS in {} seconds".format(time.time() - start))
+    print("Finished ToCS in {} seconds".format(time.time() - start))
     return results
 
 
-def run_flower(parameters, locs):
-    flower_sim = FLOWER(locs)
-    logger.debug(
+def run_flower(parameters):
+    """
+
+     :param parameters:
+     :type parameters: Parameters
+     :return:
+     """
+
+    env = Environment()
+    env.segment_count = parameters.segment_count
+    env.mdc_count = parameters.mdc_count
+    env.isdva = parameters.isdva * pq.mebi * pq.bit
+    env.isdvsd = parameters.isdvsd
+    env.comms_range = parameters.radio_range * env.comms_range.units
+
+    flower_sim = FLOWER(env)
+    print(
         "Starting FLOWER at {}".format(datetime.datetime.now().isoformat()))
-    logger.debug("Using {}".format(parameters))
+    print("Using {}".format(parameters))
     start = time.time()
     runner = flower_sim.run()
 
@@ -77,15 +100,29 @@ def run_flower(parameters, locs):
                       runner.average_energy(),
                       runner.max_buffer_size())
 
-    logger.debug("Finished FLOWER in {} seconds".format(time.time() - start))
+    print("Finished FLOWER in {} seconds".format(time.time() - start))
     return results
 
 
-def run_minds(parameters, locs):
-    minds_sim = MINDS(locs)
-    logger.debug(
+def run_minds(parameters):
+    """
+
+     :param parameters:
+     :type parameters: Parameters
+     :return:
+     """
+
+    env = Environment()
+    env.segment_count = parameters.segment_count
+    env.mdc_count = parameters.mdc_count
+    env.isdva = parameters.isdva * pq.mebi * pq.bit
+    env.isdvsd = parameters.isdvsd
+    env.comms_range = parameters.radio_range * env.comms_range.units
+
+    minds_sim = MINDS(env)
+    print(
         "Starting MINDS at {}".format(datetime.datetime.now().isoformat()))
-    logger.debug("Using {}".format(parameters))
+    print("Using {}".format(parameters))
     start = time.time()
     runner = minds_sim.run()
 
@@ -95,15 +132,29 @@ def run_minds(parameters, locs):
                       runner.average_energy(),
                       runner.max_buffer_size())
 
-    logger.debug("Finished MINDS in {} seconds".format(time.time() - start))
+    print("Finished MINDS in {} seconds".format(time.time() - start))
     return results
 
 
-def run_focus(parameters, locs):
-    focus_sim = FOCUS(locs)
-    logger.debug(
+def run_focus(parameters):
+    """
+
+     :param parameters:
+     :type parameters: Parameters
+     :return:
+     """
+
+    env = Environment()
+    env.segment_count = parameters.segment_count
+    env.mdc_count = parameters.mdc_count
+    env.isdva = parameters.isdva * pq.mebi * pq.bit
+    env.isdvsd = parameters.isdvsd
+    env.comms_range = parameters.radio_range * env.comms_range.units
+
+    focus_sim = FOCUS(env)
+    print(
         "Starting FOCUS at {}".format(datetime.datetime.now().isoformat()))
-    logger.debug("Using {}".format(parameters))
+    print("Using {}".format(parameters))
     start = time.time()
     runner = focus_sim.run()
 
@@ -113,63 +164,52 @@ def run_focus(parameters, locs):
                       runner.average_energy(),
                       runner.max_buffer_size())
 
-    logger.debug("Finished FOCUS in {} seconds".format(time.time() - start))
+    print("Finished FOCUS in {} seconds".format(time.time() - start))
     return results
 
 
 def run(parameters):
     tocs_results = []
     flower_results = []
-    minds_results = [Results(0, 0, 0, 0, 0)]
-    focus_results = [Results(0, 0, 0, 0, 0)]
+    minds_results = []
+    focus_results = []
 
-    env = Environment()
-    env.segment_count = parameters.segment_count
-    env.mdc_count = parameters.mdc_count
-    env.isdva = parameters.isdva * pq.mebi * pq.bit
-    env.isdvsd = parameters.isdvsd
-    env.comms_range = parameters.radio_range * pq.m
-
-    # MAX_PROCESSES = 64
-    MAX_PROCESSES = 4
     with multiprocessing.Pool(processes=MAX_PROCESSES) as pool:
 
-        while len(tocs_results) <= RUNS or \
-                        len(flower_results) <= RUNS:
-            # len(minds_results) <= RUNS or \
-            # len(focus_results) <= RUNS:
+        while len(tocs_results) < RUNS or \
+                len(flower_results) < RUNS or \
+                        len(minds_results) < RUNS or \
+                        len(focus_results) < RUNS:
 
-            tocs_runners = MAX_PROCESSES // 4
-            flower_runners = MAX_PROCESSES // 4
-            minds_runners = 0  # MAX_PROCESSES // 4
-            focus_runners = 0  # MAX_PROCESSES // 4
-
-            locs = np.random.rand(env.segment_count, 2) * env.grid_height
+            # tocs_runners = MAX_PROCESSES // 4
+            # flower_runners = MAX_PROCESSES // 4
+            # minds_runners = MAX_PROCESSES // 4
+            # focus_runners = MAX_PROCESSES // 4
 
             tocs_workers = []
             flower_workers = []
             minds_workers = []
             focus_workers = []
 
-            if len(tocs_results) <= RUNS:
-                tocs_workers = [pool.apply_async(run_tocs, (parameters, locs))
+            if len(tocs_results) < RUNS:
+                tocs_workers = [pool.apply_async(run_tocs, (parameters,))
                                 for
-                                _ in range(tocs_runners)]
+                                _ in range(RUNS - len(tocs_results))]
 
-            if len(flower_results) <= RUNS:
+            if len(flower_results) < RUNS:
                 flower_workers = [
-                    pool.apply_async(run_flower, (parameters, locs))
-                    for _ in range(flower_runners)]
+                    pool.apply_async(run_flower, (parameters,))
+                    for _ in range(RUNS - len(flower_results))]
 
-            if len(minds_results) <= RUNS:
+            if len(minds_results) < RUNS:
                 minds_workers = [
-                    pool.apply_async(run_minds, (parameters, locs))
-                    for _ in range(minds_runners)]
+                    pool.apply_async(run_minds, (parameters,))
+                    for _ in range(RUNS - len(minds_results))]
 
-            if len(focus_results) <= RUNS:
+            if len(focus_results) < RUNS:
                 focus_workers = [
-                    pool.apply_async(run_focus, (parameters, locs))
-                    for _ in range(focus_runners)]
+                    pool.apply_async(run_focus, (parameters,))
+                    for _ in range(RUNS - len(focus_results))]
 
             for result in tocs_workers:
                 try:
@@ -210,7 +250,7 @@ def run(parameters):
 
 def main():
     seed = int(time.time())
-    logger.debug("Random seed is %s", seed)
+    print("Random seed is %s", seed)
     np.random.seed(seed)
 
     parameters = [Parameters._make(p) for p in sim_inputs.conductor_params]
@@ -258,18 +298,22 @@ def main():
             # noinspection PyProtectedMember,PyProtectedMember
             tocs_writer.writerow(
                 {**tocs_res._asdict(), **parameter._asdict()})
+            tocs_csv.flush()
 
             # noinspection PyProtectedMember,PyProtectedMember
             flower_writer.writerow(
                 {**flower_res._asdict(), **parameter._asdict()})
+            flower_csv.flush()
 
             # noinspection PyProtectedMember,PyProtectedMember
             minds_writer.writerow(
                 {**minds_res._asdict(), **parameter._asdict()})
+            minds_csv.flush()
 
             # noinspection PyProtectedMember,PyProtectedMember
             focus_writer.writerow(
                 {**focus_res._asdict(), **parameter._asdict()})
+            focus_csv.flush()
 
 
 if __name__ == '__main__':

@@ -375,6 +375,9 @@ class TOCS(object):
             logger.debug("Running optimization round %d", round_count)
             round_count += 1
 
+            if round_count > 100:
+                raise TimeoutError("TOCS optimization got lost")
+
             average_length = self.average_tour_length()
 
             for clust in self.clusters:
@@ -441,6 +444,9 @@ class TOCS(object):
 
 def main():
     env = Environment()
+    env.segment_count = 30
+    env.mdc_count = 9
+
     seed = int(time.time())
 
     # General testing ...

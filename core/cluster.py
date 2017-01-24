@@ -138,7 +138,7 @@ class BaseCluster(object):
             self.nodes.append(node)
             self._invalidate_cache()
         else:
-            logger.warning("Re-added %s to %s", node, self)
+            logger.debug("Re-added %s to %s", node, self)
 
     def remove(self, node):
         logger.debug("Removing %s from %s", node, self)

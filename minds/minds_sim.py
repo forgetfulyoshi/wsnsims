@@ -26,6 +26,9 @@ class MINDS(object):
         locs = np.random.rand(self.env.segment_count, 2) * self.env.grid_height
         self.segments = [segment.Segment(nd) for nd in locs]
 
+        for i, seg in enumerate(self.segments):
+            seg.segment_id = i
+
         self.clusters = []
 
     def show_state(self):
@@ -182,7 +185,7 @@ class MINDS(object):
         branches = self.group_branches(mst, center)
 
         if len(branches) == 1:
-            self.show_state()
+            # self.show_state()
             raise NotImplementedError("This case should not occur")
 
         if len(branches) == 2:

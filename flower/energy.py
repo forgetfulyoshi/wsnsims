@@ -80,7 +80,7 @@ class FLOWEREnergyModel(object):
 
         # Handle the intra-hub data volume
         cell_pairs = itertools.permutations(hub.cells, 2)
-        volume = np.sum([cell_volume(*pair) for pair in cell_pairs]) * pq.bit
+        volume = np.sum([cell_volume(s, d, self.env) for s, d in cell_pairs]) * pq.bit
 
         cluster_pairs = list()
         # Handle the incoming volume from each cluster
@@ -109,7 +109,7 @@ class FLOWEREnergyModel(object):
 
             cell_pairs = itertools.product(src_cells, dst_cells)
             volume += np.sum(
-                [cell_volume(*pair) for pair in cell_pairs]) * pq.bit
+                [cell_volume(s, d, self.env) for s, d in cell_pairs]) * pq.bit
 
         return volume
 

@@ -76,7 +76,7 @@ class ToCSEnergyModel(object):
         # Handle the intra-centroid data volume
         segment_pairs = itertools.permutations(centroid.segments, 2)
         volume = np.sum(
-            [segment_volume(*pair) for pair in segment_pairs]) * pq.bit
+            [segment_volume(s, d, self.env) for s, d in segment_pairs]) * pq.bit
 
         cluster_pairs = list()
         # Handle the incoming volume from each cluster

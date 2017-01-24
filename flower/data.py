@@ -19,7 +19,7 @@ def cell_volume(src, dst, env):
 
     segment_pairs = itertools.product(src.segments, dst.segments)
     total_volume = 0. * pq.bit
-    for segment_pair in segment_pairs:
-        total_volume += segment_volume(*segment_pair, env)
+    for src, dst in segment_pairs:
+        total_volume += segment_volume(src, dst, env)
 
     return total_volume

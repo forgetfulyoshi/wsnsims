@@ -26,15 +26,15 @@ class DataVolumeTests(unittest.TestCase):
         segment_pairs = list(itertools.product(self.src_segments,
                                                self.dst_segments))
         total_segment_volume = 0. * pq.bit
-        for segment_pair in segment_pairs:
-            total_segment_volume += segment_volume(*segment_pair)
+        for src, dst in segment_pairs:
+            total_segment_volume += segment_volume(src, dst, self.env)
 
-        total_cell_volume = cell_volume(self.src_cell, self.dst_cell)
+        total_cell_volume = cell_volume(self.src_cell, self.dst_cell, self.env)
 
         np.testing.assert_almost_equal(total_segment_volume, total_cell_volume)
 
     def test_repeated_equivalency(self):
-        first_volume = cell_volume(self.src_cell, self.dst_cell)
-        second_volume = cell_volume(self.src_cell, self.dst_cell)
+        first_volume = cell_volume(self.src_cell, self.dst_cell, self.env)
+        second_volume = cell_volume(self.src_cell, self.dst_cell, self.env)
 
         np.testing.assert_almost_equal(first_volume, second_volume)
