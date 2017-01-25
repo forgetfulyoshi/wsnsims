@@ -1,6 +1,0 @@
-matplotlib
-nose
-numpy
-quantities
-scipy
-pyclustering
