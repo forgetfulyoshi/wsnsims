@@ -1,5 +1,6 @@
 """Main FLOWER simulation logic"""
 
+import collections
 import logging
 import time
 import warnings
@@ -8,6 +9,7 @@ from typing import List
 import matplotlib.pyplot as plt
 import numpy as np
 import quantities as pq
+from wsnsims.core.orderedset import OrderedSet
 from wsnsims.core import segment
 from wsnsims.core import units
 from wsnsims.core.cluster import closest_nodes
@@ -145,54 +147,65 @@ class FLOWER(object):
 
             cell.single_hop_count = len(segments)
 
-        # Calculate the set cover over the segments
-        segment_cover = set()
-        cell_cover = set()
+        # First, we need to filter the "families" for the set coverage. We
+        # start by filtering for access, then 1-hop count, then proximity.
+        families = [c for c in self.grid.cells() if c.segments]
 
-        cells = list(self.grid.cells())
+        # Group by segments covered, this also has the effect of filtering by
+        # access.
+        family_map = collections.defaultdict(list)
+        for cell in families:
+            family_map[tuple(cell.segments)].append(cell)
 
-        while segment_cover != set(self.segments):
+        # Filter by 1-hop
+        for segments, cells in family_map.items():
+            if len(cells) == 1:
+                continue
 
-            candidate = None
+            best_1_hop = 0
+            best_cells = list()
             for cell in cells:
-                if cell.access == 0:
-                    continue
+                if len(cell.neighbors) > best_1_hop:
+                    best_1_hop = len(cell.neighbors)
+                    best_cells.clear()
+                    best_cells.append(cell)
+                elif len(cell.neighbors) == best_1_hop:
+                    best_cells.append(cell)
 
-                if not candidate:
-                    candidate = cell
+            family_map[segments] = best_cells
 
-                if len(segment_cover) == 0:
-                    break
+        # Filter by proximity
+        for segments, cells in family_map.items():
+            if len(cells) == 1:
+                continue
 
-                if cell == self.damaged:
-                    continue
+            best_proximity = np.inf
+            best_cells = list()
+            for cell in cells:
+                if cell.proximity < best_proximity:
+                    best_proximity = cell.proximity
+                    best_cells.clear()
+                    best_cells.append(cell)
 
-                pot_cell_union = len(segment_cover.union(cell.segments))
-                pot_candidate_union = len(
-                    segment_cover.union(candidate.segments))
+            assert best_cells
+            family_map[segments] = best_cells
 
-                if pot_candidate_union < pot_cell_union:
-                    candidate = cell
-                    continue
+        families = list()
+        for _, cells in family_map.items():
+            families.extend(cells)
 
-                elif pot_candidate_union == pot_cell_union:
+        # Calculate the set cover over the segments
+        cover = list()
+        uncovered = set(self.segments)
 
-                    if candidate.access < cell.access:
-                        candidate = cell
-                        continue
-
-                    if candidate.signal_hop_count < cell.single_hop_count:
-                        candidate = cell
-                        continue
-
-                    if candidate.proximity > cell.proximity:
-                        candidate = cell
-                        continue
-
-            segment_cover.update(candidate.segments)
-            cell_cover.add(candidate)
+        while uncovered:
+            selected = max(families, key=lambda s: len(
+                uncovered.intersection(set(s.segments))))
+            uncovered -= set(selected.segments)
+            cover.append(selected)
 
         # Initialized!!
+        cell_cover = list(cover)
         logger.debug("Length of cover: %d", len(cell_cover))
 
         assert self.env.mdc_count < len(cell_cover)
@@ -625,9 +638,9 @@ def main():
     seed = int(time.time())
 
     # General testing ...
-    # seed = 1484764250
-    # env.segment_count = 12
-    # env.mdc_count = 5
+    seed = 1484764250
+    env.segment_count = 12
+    env.mdc_count = 5
 
     # Triggers Ec >> Em with defaults
     # seed = 1484603730
@@ -641,6 +654,7 @@ def main():
     np.random.seed(seed)
     sim = FLOWER(env)
     sim.run()
+    sim.show_state()
 
 
 if __name__ == '__main__':
