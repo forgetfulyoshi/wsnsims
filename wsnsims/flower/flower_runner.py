@@ -190,9 +190,6 @@ class FLOWERRunner(object):
             volume = self.energy_model.cluster_data_volume(
                 cluster, intercluster_only=True)
 
-            if len(cluster.anchor.segments) > 0:
-                volume /= len(cluster.anchor.segments)
-
             data_volumes.append(volume)
 
         max_data_volume = np.max(data_volumes) * pq.bit
