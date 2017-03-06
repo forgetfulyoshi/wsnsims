@@ -1,7 +1,6 @@
 from typing import List
 
 import numpy as np
-import quantities as pq
 import scipy.spatial as sp
 
 from wsnsims.core import linalg
@@ -46,17 +45,17 @@ class Tour(object):
             return self._length
 
         if len(self.vertices) < 2:
-            self._length = 0. * pq.meter
+            self._length = 0. # * pq.meter
             return self._length
 
-        total = 0. * pq.meter
+        total = 0. # * pq.meter
         tail = 0
         head = 1
         while head < len(self.vertices):
             start = self.collection_points[self.vertices[tail]]
             stop = self.collection_points[self.vertices[head]]
 
-            total += np.linalg.norm(stop - start) * pq.meter
+            total += np.linalg.norm(stop - start) # * pq.meter
 
             tail += 1
             head += 1
@@ -65,7 +64,7 @@ class Tour(object):
         return self._length
 
 
-def compute_tour(points, radio_range=0. * pq.m):
+def compute_tour(points, radio_range=0.):
     """
     For a given set of points, calculate a tour that covers each point once.
     This implementation of TSP is based on that used by IDM-kMDC, in which
@@ -103,15 +102,13 @@ def compute_tour(points, radio_range=0. * pq.m):
     collection_points = np.empty_like(points)
     center_of_mass = linalg.centroid(points[vertices])
     for vertex in vertices:
-        if np.all(np.isclose(center_of_mass.magnitude,
-                             points[vertex].magnitude)):
-
-            collection_points[vertex] = np.copy(points[vertex].magnitude) * pq.meter
+        if np.all(np.isclose(center_of_mass, points[vertex])):
+            collection_points[vertex] = np.copy(points[vertex])
             continue
 
         cp = center_of_mass - points[vertex]
         cp /= np.linalg.norm(cp)
-        cp *= radio_range.magnitude
+        cp *= radio_range
         cp += points[vertex]
         collection_points[vertex] = cp
 
@@ -152,9 +149,9 @@ def compute_tour(points, radio_range=0. * pq.m):
         collect_point = closest_perp - p
         radius = np.linalg.norm(collect_point)
 
-        if radius > radio_range.magnitude:
+        if radius > radio_range:
             collect_point /= radius
-            collect_point *= radio_range.magnitude
+            collect_point *= radio_range
 
         collect_point += p
         collection_points[point_idx] = collect_point

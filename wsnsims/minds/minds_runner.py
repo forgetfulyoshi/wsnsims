@@ -2,7 +2,7 @@ import itertools
 import logging
 
 import numpy as np
-import quantities as pq
+
 from wsnsims.core import orderedset
 from wsnsims.minds.energy import MINDSEnergyModel
 from wsnsims.minds.movement import MINDSMovementModel
@@ -64,7 +64,7 @@ class MINDSRunner(object):
 
         delays = np.array(delays)
         max_delay = np.max(delays)
-        max_delay *= pq.second
+        # max_delay *= pq.second
 
         return max_delay
 
@@ -170,7 +170,7 @@ class MINDSRunner(object):
         :rtype: pq.second
         """
 
-        latency = np.sum([self.tour_time(c) for c in clusters]) * pq.second
+        latency = np.sum([self.tour_time(c) for c in clusters])  # * pq.second
         return latency
 
     def tour_time(self, cluster):
@@ -201,7 +201,7 @@ class MINDSRunner(object):
         for clust in self.sim.clusters:
             energy.append(self.energy_model.total_energy(clust.cluster_id))
 
-        balance = np.std(energy) * pq.J
+        balance = np.std(energy)  # * pq.J
         return balance
 
     def average_energy(self):
@@ -214,7 +214,7 @@ class MINDSRunner(object):
         for clust in self.sim.clusters:
             energy.append(self.energy_model.total_energy(clust.cluster_id))
 
-        average = np.mean(energy) * pq.J
+        average = np.mean(energy) # * pq.J
         return average
 
     def max_buffer_size(self):
@@ -225,5 +225,5 @@ class MINDSRunner(object):
                 cluster.cluster_id, intercluster_only=True)
             data_volumes.append(volume)
 
-        max_data_volume = np.max(data_volumes) * pq.bit
+        max_data_volume = np.max(data_volumes) # * pq.bit
         return max_data_volume

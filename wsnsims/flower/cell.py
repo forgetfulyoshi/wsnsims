@@ -1,5 +1,4 @@
 import numpy as np
-import quantities as pq
 
 from wsnsims.core import point
 
@@ -39,7 +38,7 @@ class Cell(object):
         side_len = side_length(environment)
         x_pos = column * side_len + (side_len / 2.)
         y_pos = row * side_len + (side_len / 2.)
-        self.location = point.Vec2(np.array([x_pos, y_pos]) * pq.meter)
+        self.location = point.Vec2(np.array([x_pos, y_pos]))  # * pq.meter
 
         # The segments within radio range of this cell.
         self.segments = list()

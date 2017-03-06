@@ -2,16 +2,13 @@
 
 import collections
 import logging
-import time
 import warnings
 from typing import List
 
 import matplotlib.pyplot as plt
 import numpy as np
-import quantities as pq
-from wsnsims.core.orderedset import OrderedSet
+
 from wsnsims.core import segment
-from wsnsims.core import units
 from wsnsims.core.cluster import closest_nodes
 from wsnsims.core.comparisons import much_greater_than
 from wsnsims.core.environment import Environment
@@ -22,7 +19,6 @@ from wsnsims.flower.cluster import FlowerHub
 from wsnsims.flower.cluster import FlowerVirtualCluster
 from wsnsims.flower.cluster import FlowerVirtualHub
 from wsnsims.flower.energy import FLOWEREnergyModel
-
 from wsnsims.tocs.cluster import combine_clusters
 
 logger = logging.getLogger(__name__)
@@ -49,7 +45,7 @@ class FLOWER(object):
         self.grid = grid.Grid(self.segments, self.env)
         self.cells = list(self.grid.cells())
 
-        segment_centroid = np.mean(locs, axis=0).magnitude
+        segment_centroid = np.mean(locs, axis=0)
         logger.debug("Centroid located at %s", segment_centroid)
         self.damaged = self.grid.closest_cell(segment_centroid)
 
@@ -87,26 +83,17 @@ class FLOWER(object):
         cell_points = np.array(cell_points)
         ax.plot(cell_points[:, 0], cell_points[:, 1], 'rx')
 
+        # Illustrate the communication distance from each cell
+        for cell_point in cell_points:
+            circle = plt.Circle((cell_point[0], cell_point[1]),
+                                radius=self.env.comms_range, alpha=0.1)
+            ax.add_patch(circle)
+
         # Annotate the cells for easier debugging
         for cell in self.cells:
             xy = cell.location.nd
-            xy_text = xy + (1. * pq.meter)
+            xy_text = xy + 1.
             ax.annotate(cell, xy=xy, xytext=xy_text)
-
-        # Draw lines between each cell the virtual clusters to illustrate the
-        # virtual cluster formations.
-        # for cluster in self.virtual_clusters + [self.virtual_hub]:
-        #     route = cluster.tour
-        #     cps = route.points
-        #     ax.plot(cps[:, 0], cps[:, 1], 'mo')
-        #     ax.plot(cps[route.vertices, 0], cps[route.vertices, 1], 'm--',
-        #             lw=2)
-
-        # Annotate the virtual clusters for easier debugging
-        # for vc in self.virtual_clusters + [self.virtual_hub]:
-        #     xy = vc.location.nd
-        #     xy_text = xy + (1. * pq.meter)
-        #     ax.annotate(vc, xy=xy, xytext=xy_text)
 
         # Draw lines between each cell the clusters to illustrate the cluster
         # formations.
@@ -127,7 +114,7 @@ class FLOWER(object):
         # Annotate the clusters for easier debugging
         for cluster in self.clusters + [self.hub]:
             xy = cluster.location.nd
-            xy_text = xy + (1. * pq.meter)
+            xy_text = xy + 1.
             ax.annotate(cluster, xy=xy, xytext=xy_text)
 
         plt.show()
@@ -144,6 +131,7 @@ class FLOWER(object):
             segments = set()
             for nbr in cell.neighbors:
                 segments = set.union(segments, nbr.segments)
+                segments = segments.difference(cell.segments)
 
             cell.single_hop_count = len(segments)
 
@@ -165,11 +153,11 @@ class FLOWER(object):
             best_1_hop = 0
             best_cells = list()
             for cell in cells:
-                if len(cell.neighbors) > best_1_hop:
-                    best_1_hop = len(cell.neighbors)
+                if cell.single_hop_count > best_1_hop:
+                    best_1_hop = cell.single_hop_count
                     best_cells.clear()
                     best_cells.append(cell)
-                elif len(cell.neighbors) == best_1_hop:
+                elif cell.single_hop_count == best_1_hop:
                     best_cells.append(cell)
 
             family_map[segments] = best_cells
@@ -210,6 +198,25 @@ class FLOWER(object):
 
         assert self.env.mdc_count < len(cell_cover)
 
+        # Remove duplication among the cells
+        cell_cover.sort(key=lambda c: len(c.segments), reverse=True)
+
+        covered_segments = list()
+        for cell in cell_cover:
+            segments = list(cell.segments)
+            for seg in segments:
+                if seg in covered_segments:
+                    # This segment is already served by another cell
+                    cell.segments.remove(seg)
+                else:
+                    covered_segments.append(seg)
+
+        segment_count = 0
+        for cell in cell_cover:
+            segment_count += len(cell.segments)
+
+        assert segment_count == len(self.segments)
+
         # For future lookups, set a reference from each segment to its cell
         for cell in cell_cover:
             for seg in cell.segments:
@@ -232,8 +239,8 @@ class FLOWER(object):
         :return:
         """
 
-        points = [c.location.nd.magnitude for c in clusters]
-        origin = self.damaged.location.nd.magnitude
+        points = [c.location.nd for c in clusters]
+        origin = self.damaged.location.nd
 
         polar_angles = [self._polar_angle(p, origin) for p in points]
         indexes = np.argsort(polar_angles)
@@ -276,7 +283,7 @@ class FLOWER(object):
             c.add(closest_cell)
             self.clusters.append(c)
 
-        assert self.energy_model.total_movement_energy(self.hub) == (0. * pq.J)
+        assert self.energy_model.total_movement_energy(self.hub) == 0.
 
         # Rounds 2 through N
         r = 1
@@ -332,6 +339,7 @@ class FLOWER(object):
                     # Just for proper bookkeeping, reset the virtual cell's ID
                     # to NOT_CLUSTERED
                     self.damaged.cluster_id = -1
+                    self.damaged.virtual_cluster_id = -1
                     logger.debug("ROUND %d: Moved %s to %s", r, self.hub,
                                  best_cell)
 
@@ -432,7 +440,12 @@ class FLOWER(object):
 
     def energy_balance(self):
         all_clusters = self.clusters + [self.hub]
-        balance = np.std([self.total_cluster_energy(c) for c in all_clusters])
+
+        energy = [self.total_cluster_energy(c) for c in all_clusters]
+        if self.ec_is_large or self.em_is_large:
+            energy.append(0.)
+
+        balance = np.std(energy)
         return balance
 
     def update_anchors(self, custom=None):
@@ -540,7 +553,7 @@ class FLOWER(object):
     def optimize_large_ec(self):
 
         for r in range(101):
-            logger.debug("Starting round %d of Em >> Ec", r)
+            logger.debug("Starting round %d of Ec >> Em", r)
 
             if r > 100:
                 raise FlowerError("Optimization got lost")
@@ -551,9 +564,11 @@ class FLOWER(object):
             c_most = self.highest_energy_cluster(include_hub=False)
 
             # get the neighbors of c_most
-            neighbors = [c for c in self.clusters if
-                         (abs(c.cluster_id - c_most.cluster_id) == 1) or (abs(
-                             c.cluster_id - c_most.cluster_id) == self.env.mdc_count - 2)]
+            neighbors = [
+                c for c in self.clusters if
+                (abs(c.cluster_id - c_most.cluster_id) == 1) or
+                (abs(
+                    c.cluster_id - c_most.cluster_id) == self.env.mdc_count - 2)]
 
             assert (len(neighbors) <= 2) and (len(neighbors) > 0)
 
@@ -594,10 +609,13 @@ class FLOWER(object):
         self.update_anchors(clusters)
 
         e_c = np.sum([self.energy_model.total_comms_energy(cluster)
-                      for cluster in clusters])
+                      for cluster in clusters])  # * pq.J
 
         e_m = np.sum([self.energy_model.total_movement_energy(cluster)
-                      for cluster in clusters])
+                      for cluster in clusters])  # * pq.J
+
+        logger.debug("Em is %s", e_m)
+        logger.debug("Ec is %s", e_c)
 
         if much_greater_than(e_m, e_c):
             logger.debug("Em >> Ec, running special case")
@@ -618,42 +636,44 @@ class FLOWER(object):
             self.greedy_expansion()
             self.optimization()
 
-        # self.show_state()
+        # self.greedy_expansion()
+        # self.optimization()
+
         return self
 
     def run(self):
         sim = self.compute_paths()
         runner = flower_runner.FLOWERRunner(sim, self.env)
+
         logger.debug("Maximum comms delay: {}".format(
             runner.maximum_communication_delay()))
         logger.debug("Energy balance: {}".format(runner.energy_balance()))
         logger.debug("Average energy: {}".format(runner.average_energy()))
-        logger.debug("Max buffer size: {}".format(
-            runner.max_buffer_size().rescale(units.MB)))
+        logger.debug("Max buffer size: {}".format(runner.max_buffer_size()))
         return runner
 
 
 def main():
     env = Environment()
+
+    import time
     seed = int(time.time())
 
     # General testing ...
-    seed = 1484764250
-    env.segment_count = 12
-    env.mdc_count = 5
-
-    # Triggers Ec >> Em with defaults
-    # seed = 1484603730
-
-    # Triggers standard optimization
-    # env.segment_count = 12
-    # env.mdc_count = 3
-    # seed = 1484623701
+    # seed = 1488683682
+    env.segment_count = 30
+    env.mdc_count = 9
+    env.isdva = 64
+    env.comms_range = 100
 
     logger.debug("Random seed is %s", seed)
     np.random.seed(seed)
+    start = time.time()
     sim = FLOWER(env)
     sim.run()
+    finish = time.time()
+    delta = finish - start
+    logger.debug("Run time: %f seconds", delta)
     sim.show_state()
 
 

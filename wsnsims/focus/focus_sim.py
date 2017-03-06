@@ -5,7 +5,7 @@ import typing
 
 import matplotlib.pyplot as plt
 import numpy as np
-import quantities as pq
+
 import scipy.sparse.csgraph as sp
 import scipy.spatial.distance as sp_dist
 from wsnsims.core import units
@@ -45,7 +45,7 @@ class FOCUS(object):
         # Annotate the segments for easier debugging
         for seg in self.segments:
             xy = seg.location.nd
-            xy_text = xy + (1. * pq.meter)
+            xy_text = xy + 1.
 
             ax.annotate(seg, xy=xy, xytext=xy_text)
 
@@ -59,7 +59,7 @@ class FOCUS(object):
         # Annotate the clusters for easier debugging
         for clust in self.clusters:
             xy = clust.location.nd
-            xy_text = xy + (1. * pq.meter)
+            xy_text = xy + 1.
 
             ax.annotate(clust, xy=xy, xytext=xy_text)
 
@@ -70,15 +70,14 @@ class FOCUS(object):
         segments = list()
         for loc in locs:
             for segment in self.segments:
-                if np.all(np.isclose(loc, segment.location.nd.magnitude)):
+                if np.all(np.isclose(loc, segment.location.nd)):
                     segments.append(segment)
 
         return segments
 
     def create_clusters(self):
 
-        segment_locs = [list(seg.location.nd.magnitude) for seg in
-                        self.segments]
+        segment_locs = [list(seg.location.nd) for seg in self.segments]
         cluster_count = self.env.mdc_count
 
         cure = Cure(segment_locs, cluster_count, number_represent_points=5,
@@ -109,8 +108,8 @@ class FOCUS(object):
         :rtype: Segment, Segment
         """
 
-        c1_locs = [list(seg.location.nd.magnitude) for seg in cluster_1.nodes]
-        c2_locs = [list(seg.location.nd.magnitude) for seg in cluster_2.nodes]
+        c1_locs = [list(seg.location.nd) for seg in cluster_1.nodes]
+        c2_locs = [list(seg.location.nd) for seg in cluster_2.nodes]
 
         cure_1 = Cure(c1_locs, 1, number_represent_points=5, compression=0.)
         cure_2 = Cure(c2_locs, 1, number_represent_points=5, compression=0.)
@@ -153,8 +152,8 @@ class FOCUS(object):
         tn_2 = cluster_2.tour_length
         cluster_2.remove(rep_segment_1)
 
-        w_1 = (tn_1 - tnw_1).magnitude
-        w_2 = (tn_2 - tnw_2).magnitude
+        w_1 = (tn_1 - tnw_1)
+        w_2 = (tn_2 - tnw_2)
 
         return (w_1, w_2), (rep_segment_1, rep_segment_2)
 
@@ -210,25 +209,29 @@ class FOCUS(object):
             runner.maximum_communication_delay()))
         logger.debug("Energy balance: {}".format(runner.energy_balance()))
         logger.debug("Average energy: {}".format(runner.average_energy()))
-        logger.debug("Max buffer size: {}".format(
-            runner.max_buffer_size().rescale(units.MB)))
+        logger.debug("Max buffer size: {}".format(runner.max_buffer_size()))
         return runner
 
 
 def main():
     env = Environment()
-    seed = int(time.time())
+    # seed = int(time.time())
 
     # General testing ...
     # seed = 1484764250
     # env.segment_count = 12
     # env.mdc_count = 5
 
+    seed = 1487736569
+    env.isdva = 10.  # * pq.mebi * pq.bit
+    # env.comms_range = 300 * pq.meter
+
     logger.debug("Random seed is %s", seed)
     np.random.seed(seed)
 
     sim = FOCUS(env)
     sim.run()
+    sim.show_state()
 
 
 if __name__ == '__main__':

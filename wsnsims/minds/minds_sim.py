@@ -4,7 +4,7 @@ import time
 
 import matplotlib.pyplot as plt
 import numpy as np
-import quantities as pq
+
 import scipy.sparse.csgraph as sp
 from wsnsims.core import segment, units
 from wsnsims.core.environment import Environment
@@ -44,7 +44,7 @@ class MINDS(object):
         # Annotate the segments for easier debugging
         for seg in self.segments:
             xy = seg.location.nd
-            xy_text = xy + (1. * pq.meter)
+            xy_text = xy + 1.
 
             ax.annotate(seg, xy=xy, xytext=xy_text)
 
@@ -58,7 +58,7 @@ class MINDS(object):
         # Annotate the clusters for easier debugging
         for clust in self.clusters:
             xy = clust.location.nd
-            xy_text = xy + (1. * pq.meter)
+            xy_text = xy + 1.
 
             ax.annotate(clust, xy=xy, xytext=xy_text)
 
@@ -224,7 +224,7 @@ class MINDS(object):
         if self.env.mdc_count == 1:
             return self
 
-        for r in range(self.env.mdc_count):
+        for r in range(self.env.mdc_count - 1):
             longest_cluster = max(self.clusters, key=lambda c: c.tour_length)
             segment_ids = [s.segment_id for s in longest_cluster.nodes]
             segment_ids.append(longest_cluster.relay_node.segment_id)
@@ -250,6 +250,10 @@ class MINDS(object):
             self.clusters.append(first_cluster)
             self.clusters.append(second_cluster)
 
+        # Just re-label the clusters for display
+        for i, clust in enumerate(self.clusters):
+            clust._cluster_id = i
+
         return self
 
     def run(self):
@@ -264,19 +268,21 @@ class MINDS(object):
             runner.maximum_communication_delay()))
         logger.debug("Energy balance: {}".format(runner.energy_balance()))
         logger.debug("Average energy: {}".format(runner.average_energy()))
-        logger.debug("Max buffer size: {}".format(
-            runner.max_buffer_size().rescale(units.MB)))
+        logger.debug("Max buffer size: {}".format(runner.max_buffer_size()))
         return runner
 
 
 def main():
     env = Environment()
-    seed = int(time.time())
+    # seed = int(time.time())
 
     # General testing ...
     # seed = 1484764250
     # env.segment_count = 12
     # env.mdc_count = 5
+    seed = 1487736569
+    env.isdva = 10.  # * pq.mebi * pq.bit
+    # env.comms_range = 300 * pq.meter
 
     # Specific testing ...
     # seed = 1483676009  # center has in-degree of 3
@@ -286,6 +292,7 @@ def main():
     np.random.seed(seed)
     sim = MINDS(env)
     sim.run()
+    sim.show_state()
 
 
 if __name__ == '__main__':

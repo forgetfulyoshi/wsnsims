@@ -3,7 +3,7 @@ import itertools
 import logging
 
 import numpy as np
-import quantities as pq
+
 import scipy.sparse.csgraph as sp
 
 from wsnsims.core.data import segment_volume
@@ -167,7 +167,7 @@ class FOCUSEnergyModel(object):
                 list(itertools.product(src_segments, dst_segments)))
 
         intercluster_volume = np.sum([segment_volume(src, dst, self.env)
-                                      for src, dst in segment_pairs]) * pq.bit
+                                      for src, dst in segment_pairs])
 
         if not intercluster_only:
             # NOW we calculate the intra-cluster volume
@@ -175,9 +175,9 @@ class FOCUSEnergyModel(object):
                 current_cluster.tour.objects, 2)
             intracluster_volume = np.sum([segment_volume(src, dst, self.env)
                                           for src, dst in
-                                          segment_pairs]) * pq.bit
+                                          segment_pairs])
         else:
-            intracluster_volume = 0. * pq.bit
+            intracluster_volume = 0.
 
         # ... and the outgoing data volume from this cluster
         other_segments = list(
@@ -185,7 +185,7 @@ class FOCUSEnergyModel(object):
         segment_pairs = itertools.product(current_cluster.tour.objects,
                                           other_segments)
         intercluster_volume += np.sum([segment_volume(s, d, self.env)
-                                       for s, d in segment_pairs]) * pq.bit
+                                       for s, d in segment_pairs])
 
         return intercluster_volume + intracluster_volume
 

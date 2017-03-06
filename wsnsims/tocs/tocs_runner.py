@@ -1,5 +1,5 @@
 import numpy as np
-import quantities as pq
+
 from wsnsims.core import data
 from wsnsims.tocs.energy import ToCSEnergyModel
 
@@ -44,7 +44,7 @@ class ToCSRunner(object):
 
         delays = np.array(delays)
         max_delay = np.max(delays)
-        max_delay *= pq.second
+        # max_delay *= pq.second
 
         return max_delay
 
@@ -115,7 +115,7 @@ class ToCSRunner(object):
         """
 
         if begin.cluster_id == end.cluster_id:
-            return 0. * pq.second
+            return 0.
 
         begin_cluster = self.find_cluster(begin)
         centroid_time = self.tour_time(self.sim.centroid)
@@ -162,7 +162,7 @@ class ToCSRunner(object):
         for clust in self.sim.clusters + [self.sim.centroid]:
             energy.append(self.energy_model.total_energy(clust.cluster_id))
 
-        balance = np.std(energy) * pq.J
+        balance = np.std(energy)
         return balance
 
     def average_energy(self):
@@ -175,7 +175,7 @@ class ToCSRunner(object):
         for clust in self.sim.clusters + [self.sim.centroid]:
             energy.append(self.energy_model.total_energy(clust.cluster_id))
 
-        average = np.mean(energy) * pq.J
+        average = np.mean(energy)
         return average
 
     def max_buffer_size(self):
@@ -190,5 +190,5 @@ class ToCSRunner(object):
             self.sim.centroid.cluster_id)
         data_volumes.append(centroid_volume)
 
-        max_data_volume = np.max(data_volumes) * pq.bit
+        max_data_volume = np.max(data_volumes)
         return max_data_volume

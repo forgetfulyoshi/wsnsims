@@ -2,7 +2,7 @@ import itertools
 import logging
 
 import numpy as np
-import quantities as pq
+
 from wsnsims.core import tour, point
 from wsnsims.core.orderedset import OrderedSet
 
@@ -89,7 +89,7 @@ class BaseCluster(object):
         if self.relay_node:
             points.append(self.relay_node.location.nd)
 
-        location = linalg.centroid(np.array(points)) * pq.meter
+        location = linalg.centroid(np.array(points))
         self._location = point.Vec2(location)
         return self._location
 
@@ -104,7 +104,7 @@ class BaseCluster(object):
         if self.relay_node:
             points.append(self.relay_node.location.nd)
 
-        points = np.array(points) * pq.meter
+        points = np.array(points)
         self._tour = tour.compute_tour(points,
                                        radio_range=self._radio_range)
 
@@ -140,6 +140,8 @@ class BaseCluster(object):
             self._invalidate_cache()
         else:
             logger.debug("Re-added %s to %s", node, self)
+            node.cluster_id = self.cluster_id
+            self._invalidate_cache()
 
     def remove(self, node):
         logger.debug("Removing %s from %s", node, self)

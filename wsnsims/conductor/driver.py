@@ -7,7 +7,7 @@ import time
 from collections import namedtuple
 
 import numpy as np
-import quantities as pq
+
 from wsnsims.conductor import sim_inputs
 from wsnsims.core.environment import Environment
 from wsnsims.core.results import Results
@@ -20,8 +20,8 @@ from wsnsims.focus.focus_sim import FOCUS
 logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger(__name__)
 
-MAX_PROCESSES = 8
 RUNS = 30
+WAIT_TIME = 100
 
 Parameters = namedtuple('Parameters',
                         ['segment_count', 'mdc_count', 'isdva', 'isdvsd',
@@ -51,9 +51,9 @@ def run_tocs(parameters):
     env = Environment()
     env.segment_count = parameters.segment_count
     env.mdc_count = parameters.mdc_count
-    env.isdva = parameters.isdva * pq.mebi * pq.bit
+    env.isdva = parameters.isdva
     env.isdvsd = parameters.isdvsd
-    env.comms_range = parameters.radio_range * env.comms_range.units
+    env.comms_range = parameters.radio_range
     tocs_sim = TOCS(env)
 
     print(
@@ -83,9 +83,9 @@ def run_flower(parameters):
     env = Environment()
     env.segment_count = parameters.segment_count
     env.mdc_count = parameters.mdc_count
-    env.isdva = parameters.isdva * pq.mebi * pq.bit
+    env.isdva = parameters.isdva
     env.isdvsd = parameters.isdvsd
-    env.comms_range = parameters.radio_range * env.comms_range.units
+    env.comms_range = parameters.radio_range
 
     flower_sim = FLOWER(env)
     print(
@@ -115,9 +115,9 @@ def run_minds(parameters):
     env = Environment()
     env.segment_count = parameters.segment_count
     env.mdc_count = parameters.mdc_count
-    env.isdva = parameters.isdva * pq.mebi * pq.bit
+    env.isdva = parameters.isdva
     env.isdvsd = parameters.isdvsd
-    env.comms_range = parameters.radio_range * env.comms_range.units
+    env.comms_range = parameters.radio_range
 
     minds_sim = MINDS(env)
     print(
@@ -147,9 +147,9 @@ def run_focus(parameters):
     env = Environment()
     env.segment_count = parameters.segment_count
     env.mdc_count = parameters.mdc_count
-    env.isdva = parameters.isdva * pq.mebi * pq.bit
+    env.isdva = parameters.isdva
     env.isdvsd = parameters.isdvsd
-    env.comms_range = parameters.radio_range * env.comms_range.units
+    env.comms_range = parameters.radio_range
 
     focus_sim = FOCUS(env)
     print(
@@ -174,17 +174,12 @@ def run(parameters):
     minds_results = []
     focus_results = []
 
-    with multiprocessing.Pool(processes=MAX_PROCESSES) as pool:
+    with multiprocessing.Pool() as pool:
 
         while len(tocs_results) < RUNS or \
-                len(flower_results) < RUNS or \
+                        len(flower_results) < RUNS or \
                         len(minds_results) < RUNS or \
                         len(focus_results) < RUNS:
-
-            # tocs_runners = MAX_PROCESSES // 4
-            # flower_runners = MAX_PROCESSES // 4
-            # minds_runners = MAX_PROCESSES // 4
-            # focus_runners = MAX_PROCESSES // 4
 
             tocs_workers = []
             flower_workers = []
@@ -192,9 +187,9 @@ def run(parameters):
             focus_workers = []
 
             if len(tocs_results) < RUNS:
-                tocs_workers = [pool.apply_async(run_tocs, (parameters,))
-                                for
-                                _ in range(RUNS - len(tocs_results))]
+                tocs_workers = [
+                    pool.apply_async(run_tocs, (parameters,))
+                    for _ in range(RUNS - len(tocs_results))]
 
             if len(flower_results) < RUNS:
                 flower_workers = [
@@ -213,28 +208,28 @@ def run(parameters):
 
             for result in tocs_workers:
                 try:
-                    tocs_results.append(result.get(timeout=100))
+                    tocs_results.append(result.get(timeout=WAIT_TIME))
                 except Exception:
                     logger.exception('ToCS Exception')
                     continue
 
             for result in flower_workers:
                 try:
-                    flower_results.append(result.get(timeout=100))
+                    flower_results.append(result.get(timeout=WAIT_TIME))
                 except Exception:
                     logger.exception('FLOWER Exception')
                     continue
 
             for result in minds_workers:
                 try:
-                    minds_results.append(result.get(timeout=100))
+                    minds_results.append(result.get(timeout=WAIT_TIME))
                 except Exception:
                     logger.exception('MIDNS Exception')
                     continue
 
             for result in focus_workers:
                 try:
-                    focus_results.append(result.get(timeout=100))
+                    focus_results.append(result.get(timeout=WAIT_TIME))
                 except Exception:
                     logger.exception('FOCUS Exception')
                     continue
@@ -249,6 +244,7 @@ def run(parameters):
 
 
 def main():
+    start = time.time()
     seed = int(time.time())
     print("Random seed is %s", seed)
     np.random.seed(seed)
@@ -315,6 +311,9 @@ def main():
                 {**focus_res._asdict(), **parameter._asdict()})
             focus_csv.flush()
 
+    finish = time.time()
+    delta = finish - start
+    print("Completed simulation in {} seconds".format(delta))
 
 if __name__ == '__main__':
     main()

@@ -2,7 +2,7 @@ import itertools
 import logging
 
 import numpy as np
-import quantities as pq
+
 import scipy.sparse.csgraph as sp
 
 logger = logging.getLogger(__name__)
@@ -17,7 +17,7 @@ class FLOWERMovementModel(object):
         self.sim = simulation_data
         self.env = environment
 
-        self._segment_indexes = {}
+        self._cell_indexes = {}
 
         #: Cached version of the adjacency matrix. Weights are path lengths.
         self._adj_mat = self._compute_adjacency_matrix()
@@ -30,24 +30,20 @@ class FLOWERMovementModel(object):
         builder. This takes the cluster paths and builds out a matrix suitable
         for use in Dijkstra's algorithm.
 
-        This routine just sets the value of the self.sim attribute.
-
-        :return: None
+        :return: The adjacency matrix for the simulation
+        :rtype: sp.csr_matrix
         """
 
-        i = 0
-        for cluster in self.sim.clusters + [self.sim.hub]:
-            for seg_vertex in cluster.tour.vertices:
-                seg = cluster.tour.objects[seg_vertex]
-                if seg not in self._segment_indexes:
-                    self._segment_indexes[seg] = i
-                    i += 1
+        # Set up a quick-reference index to map cells to indexes
+        for i, cell in enumerate(self.sim.cells):
+            self._cell_indexes[cell] = i
 
-        if self.sim.hub.cells == [self.sim.damaged]:
-            node_count = len(self.sim.cells) + 1
-        else:
-            node_count = len(self.sim.cells)
+        if all([self.sim.hub.cells == [self.sim.damaged],
+                self.sim.damaged not in self.sim.cells]):
+            # Add the "damaged" virtual cell to the index if we need it
+            self._cell_indexes[self.sim.damaged] = len(self.sim.cells)
 
+        node_count = len(list(self._cell_indexes.keys()))
         g_sparse = np.zeros((node_count, node_count), dtype=float)
         g_sparse[:] = np.inf
 
@@ -59,15 +55,15 @@ class FLOWERMovementModel(object):
                 start_vertex = cluster_tour.vertices[i]
                 stop_vertex = cluster_tour.vertices[j]
 
-                start_pt = cluster_tour.collection_points[start_vertex]
-                stop_pt = cluster_tour.collection_points[stop_vertex]
+                start_pt = cluster_tour.points[start_vertex]
+                stop_pt = cluster_tour.points[stop_vertex]
                 distance = np.linalg.norm(stop_pt - start_pt)
 
                 start_seg = cluster_tour.objects[start_vertex]
                 stop_seg = cluster_tour.objects[stop_vertex]
 
-                start_index = self._segment_indexes[start_seg]
-                stop_index = self._segment_indexes[stop_seg]
+                start_index = self._cell_indexes[start_seg]
+                stop_index = self._cell_indexes[stop_seg]
 
                 g_sparse[start_index, stop_index] = distance
 
@@ -105,14 +101,14 @@ class FLOWERMovementModel(object):
         :return: float, list(int)
         """
 
-        begin_index = self._segment_indexes[begin]
-        end_index = self._segment_indexes[end]
+        begin_index = self._cell_indexes[begin]
+        end_index = self._cell_indexes[end]
 
         distance = self._distance_mat[begin_index, end_index]
-        distance *= pq.meter
+        # distance *= pq.meter
 
         path = [begin]
-        inv_index = {v: k for k, v in self._segment_indexes.items()}
+        inv_index = {v: k for k, v in self._cell_indexes.items()}
         while True:
             next_index = self._preds[end_index, begin_index]
             if next_index == -9999:

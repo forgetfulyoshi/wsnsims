@@ -4,7 +4,7 @@ import typing
 
 import matplotlib.pyplot as plt
 import numpy as np
-import quantities as pq
+
 from wsnsims.core import segment, units
 from wsnsims.core.comparisons import much_greater_than
 from wsnsims.core.environment import Environment
@@ -79,7 +79,7 @@ class TOCS(object):
         # Annotate the segments for easier debugging
         for seg in self.segments:
             xy = seg.location.nd
-            xy_text = xy + (1. * pq.meter)
+            xy_text = xy + 1.
 
             ax.annotate(seg, xy=xy, xytext=xy_text)
 
@@ -121,7 +121,7 @@ class TOCS(object):
 
             max_tour = clust.tour_length
             max_tour += np.linalg.norm(
-                clust.rendezvous_point.location.nd - self.center) * pq.meter
+                clust.rendezvous_point.location.nd - self.center)
 
             if max_tour < average_length:
                 logger.debug("Cannot optimize %s in this round", clust)
@@ -161,7 +161,7 @@ class TOCS(object):
             new_rp_loc *= 0.75
             new_rp_loc += self.center
 
-            if np.allclose(current_rp_loc.magnitude, new_rp_loc.magnitude):
+            if np.allclose(current_rp_loc, new_rp_loc):
                 break
 
             # Now assign the new location to the existing RP object (just saves
@@ -198,7 +198,7 @@ class TOCS(object):
 
             # Handle the case where a cluster's tour cannot be optimized any
             # further.
-            if np.allclose(new_rp_loc.magnitude, current_rp_loc.magnitude):
+            if np.allclose(new_rp_loc, current_rp_loc):
                 break
 
             # Now assign the new location to the existing RP object (just saves
@@ -220,10 +220,10 @@ class TOCS(object):
         """
 
         closest = None
-        min_distance = np.inf * pq.meter
+        min_distance = np.inf
         for seg in clust.segments:
             distance = np.linalg.norm(seg.location.nd - self.center)
-            distance *= pq.meter
+
             if min_distance > distance:
                 min_distance = distance
                 closest = seg
@@ -269,7 +269,7 @@ class TOCS(object):
 
         # Find the segment in G that is closest to the centroid of Ci
         closest = None
-        min_distance = 0. * pq.meter
+        min_distance = 0.
         for seg in self.centroid.segments:
             distance = np.linalg.norm(seg.location.nd - clust.location.nd)
             if min_distance > distance:
@@ -332,7 +332,7 @@ class TOCS(object):
 
         c_tour = clust.tour
         if len(c_tour.points) == 1:
-            rendezvous_point = np.copy(c_tour.points[0]) * pq.meter
+            rendezvous_point = np.copy(c_tour.points[0])
 
         else:
             decorated = list()
@@ -412,7 +412,7 @@ class TOCS(object):
 
         # Find the average tour length and return it
         lengths = np.array([c.tour_length for c in clusters])
-        average_tour_length = float(np.mean(lengths)) * pq.meter
+        average_tour_length = float(np.mean(lengths))
         return average_tour_length
 
     def compute_paths(self):
@@ -437,18 +437,17 @@ class TOCS(object):
             runner.maximum_communication_delay()))
         logger.debug("Energy balance: {}".format(runner.energy_balance()))
         logger.debug("Average energy: {}".format(runner.average_energy()))
-        logger.debug("Max buffer size: {}".format(
-            runner.max_buffer_size().rescale(units.MB)))
+        logger.debug("Max buffer size: {}".format(runner.max_buffer_size()))
         return runner
 
 
 def main():
     env = Environment()
-    seed = int(time.time())
+    # seed = int(time.time())
 
     # General testing ...
-    # seed = 1484764250
-    # env.segment_count = 12
+    seed = 1487736569
+    env.isdva = 10.
     # env.mdc_count = 5
 
     logger.debug("Random seed is %s", seed)

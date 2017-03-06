@@ -1,7 +1,7 @@
 import logging
 
 import numpy as np
-import quantities as pq
+
 from wsnsims.flower.energy import FLOWEREnergyModel
 from wsnsims.flower.movement import FLOWERMovementModel
 
@@ -19,7 +19,7 @@ class FLOWERRunner(object):
         """
 
         :param sim: The simulation after a run of ToCS
-        :type sim: flower.flower_sim.FlowerSim
+        :type sim: flower.flower_sim.FLOWER
         :param environment:
         :type environment: core.environment.Environment
         """
@@ -48,7 +48,7 @@ class FLOWERRunner(object):
 
         delays = np.array(delays)
         max_delay = np.max(delays)
-        max_delay *= pq.second
+        # max_delay *= pq.second
 
         return max_delay
 
@@ -110,7 +110,7 @@ class FLOWERRunner(object):
         end_cluster = self.cell_cluster(end)
 
         if begin_cluster == end_cluster:
-            return 0. * pq.second
+            return 0.  # * pq.second
 
         if begin_cluster.anchor == end_cluster.anchor:
             delay = self.tour_time(end_cluster)
@@ -167,7 +167,12 @@ class FLOWERRunner(object):
         for cluster in self.sim.clusters + [self.sim.hub]:
             energy.append(self.energy_model.total_energy(cluster.cluster_id))
 
-        balance = np.std(energy) * pq.J
+        if self.sim.em_is_large or self.sim.ec_is_large:
+            # Estimate to simulate spreading work out between the hub MDC and
+            # other cluster MDCs
+            energy.append(0.)
+
+        balance = np.std(energy)
         return balance
 
     def average_energy(self):
@@ -180,17 +185,36 @@ class FLOWERRunner(object):
         for cluster in self.sim.clusters + [self.sim.hub]:
             energy.append(self.energy_model.total_energy(cluster.cluster_id))
 
-        average = np.mean(energy) * pq.J
+        if self.sim.em_is_large or self.sim.ec_is_large:
+            # Estimate to simulate spreading work out between the hub MDC and
+            # other cluster MDCs
+            energy.append(0.)
+
+        average = np.mean(energy)
         return average
+
+    def neighbors(self, anchor):
+
+        clusters = list()
+        for cluster in self.sim.clusters:
+            if cluster.anchor == anchor:
+                clusters.append(cluster)
+
+        return clusters
 
     def max_buffer_size(self):
 
         data_volumes = list()
-        for cluster in self.sim.clusters:
-            volume = self.energy_model.cluster_data_volume(
-                cluster, intercluster_only=True)
+        for anchor in self.sim.hub.cells:
+
+            volume = 0.  # * pq.bit
+            clusters = self.neighbors(anchor)
+
+            for cluster in clusters:
+                volume += self.energy_model.cluster_data_volume(cluster,
+                                                                intercluster_only=True)
 
             data_volumes.append(volume)
 
-        max_data_volume = np.max(data_volumes) * pq.bit
+        max_data_volume = np.max(data_volumes)  # * pq.bit
         return max_data_volume

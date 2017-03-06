@@ -2,6 +2,7 @@
 
 import itertools
 import logging
+import math
 
 import numpy as np
 
@@ -39,15 +40,17 @@ class Grid(object):
 
         # First, adjust the physical size of the grid to accommodate whole
         # cells. This keeps us from having partial cells in the simulation.
-        self.width = np.round(self.width / side_len) * side_len
-        self.height = np.round(self.height / side_len) * side_len
-
-        logger.debug("Adjusted dimensions: %s x %s", self.width, self.height)
+        # self.width = np.round(self.width / side_len) * side_len
+        # self.height = np.round(self.height / side_len) * side_len
+        #
+        # logger.debug("Adjusted dimensions: %s x %s", self.width, self.height)
 
         # Now, calculate the number of cells per row and column. This also
         # makes the row and column counts unit-less.
-        self.rows = int(self.height / side_len)
-        self.cols = int(self.width / side_len)
+        self.rows = math.ceil(self.height / side_len)
+        self.cols = math.ceil(self.width / side_len)
+
+        logger.debug("Grid is %d x %d cells", self.rows, self.cols)
 
         # Initialize the grid
         self._grid = list()
@@ -77,7 +80,7 @@ class Grid(object):
         closest_cell = None
         closest_distance = np.inf
         for cell in self.cells():
-            distance = np.linalg.norm(position - cell.location.nd.magnitude)
+            distance = np.linalg.norm(position - cell.location.nd)
             if distance < closest_distance:
                 closest_cell = cell
                 closest_distance = distance

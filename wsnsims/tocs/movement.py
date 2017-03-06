@@ -1,7 +1,7 @@
 import logging
 
 import numpy as np
-import quantities as pq
+
 import scipy.sparse.csgraph as sp
 
 logger = logging.getLogger(__name__)
@@ -111,5 +111,5 @@ class ToCSMovementModel(object):
         end_index = self._segment_indexes[end]
 
         distance = self._distance_mat[begin_index, end_index]
-        distance *= pq.meter
+        # distance *= pq.meter
         return distance

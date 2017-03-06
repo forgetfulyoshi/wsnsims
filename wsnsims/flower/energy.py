@@ -1,7 +1,6 @@
 import itertools
 
 import numpy as np
-import quantities as pq
 
 from wsnsims.flower.data import cell_volume
 
@@ -36,9 +35,9 @@ class FLOWEREnergyModel(object):
             # Handle the intra-cluster data volume
             cell_pairs = itertools.permutations(cluster.cells, 2)
             internal_volume = np.sum(
-                [cell_volume(s, d, self.env) for s, d in cell_pairs]) * pq.bit
+                [cell_volume(s, d, self.env) for s, d in cell_pairs])
         else:
-            internal_volume = 0. * pq.bit
+            internal_volume = 0.  # * pq.bit
 
         # Handle the inter-cluster data volume
         external_cells = list(set(self.sim.cells) - set(cluster.cells))
@@ -48,7 +47,7 @@ class FLOWEREnergyModel(object):
         # Incoming data ...
         cell_pairs += list(itertools.product(external_cells, cluster.cells))
         external_volume = np.sum(
-            [cell_volume(s, d, self.env) for s, d in cell_pairs]) * pq.bit
+            [cell_volume(s, d, self.env) for s, d in cell_pairs])  # * pq.bit
 
         total_volume = internal_volume + external_volume
         return total_volume
@@ -78,9 +77,21 @@ class FLOWEREnergyModel(object):
         :rtype: pq.bit
         """
 
-        # Handle the intra-hub data volume
-        cell_pairs = itertools.permutations(hub.cells, 2)
-        volume = np.sum([cell_volume(s, d, self.env) for s, d in cell_pairs]) * pq.bit
+        # Only consider intra-hub traffic for cells that belong ONLY to the
+        # hub cluster.
+        cells = list(hub.cells)
+        for cell in hub.cells:
+            for cluster in self.sim.clusters:
+                if cell in cluster.cells:
+                    cells.remove(cell)
+
+        if cells:
+            # Handle the intra-hub data volume
+            cell_pairs = itertools.permutations(hub.cells, 2)
+            volume = np.sum([cell_volume(s, d, self.env)
+                             for s, d in cell_pairs])  # * pq.bit
+        else:
+            volume = 0  # * pq.bit
 
         cluster_pairs = list()
         # Handle the incoming volume from each cluster
@@ -109,7 +120,7 @@ class FLOWEREnergyModel(object):
 
             cell_pairs = itertools.product(src_cells, dst_cells)
             volume += np.sum(
-                [cell_volume(s, d, self.env) for s, d in cell_pairs]) * pq.bit
+                [cell_volume(s, d, self.env) for s, d in cell_pairs])
 
         return volume
 

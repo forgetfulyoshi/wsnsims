@@ -1,7 +1,6 @@
 import itertools
 import logging
 
-import quantities as pq
 from wsnsims.core import point
 
 from wsnsims.core.cluster import BaseCluster
@@ -49,7 +48,7 @@ class ToCSCentroid(ToCSCluster):
         :type environment: core.environment.Environment
         """
         super(ToCSCentroid, self).__init__(environment)
-        self._radio_range = 0. * pq.meter
+        self._radio_range = 0.  # * pq.meter
         self._segments = []
 
     def add_segment(self, segment):

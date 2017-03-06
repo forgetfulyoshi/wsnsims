@@ -1,7 +1,7 @@
 import logging
 
 import numpy as np
-import quantities as pq
+
 from wsnsims.core import orderedset
 from wsnsims.focus.energy import FOCUSEnergyModel
 from wsnsims.focus.movement import FOCUSMovementModel
@@ -64,7 +64,7 @@ class FOCUSRunner(object):
 
         delays = np.array(delays)
         max_delay = np.max(delays)
-        max_delay *= pq.second
+        # max_delay *= pq.second
 
         return max_delay
 
@@ -168,13 +168,13 @@ class FOCUSRunner(object):
 
             segment_speed_pairs.append((path_cluster.mdc_speed, segments))
 
-        travel_delay = 0. * pq.second
+        travel_delay = 0.  # * pq.second
         for speed, segments in segment_speed_pairs:
-            cluster_distance = 0 * pq.meter
+            cluster_distance = 0  # * pq.meter
             start_segment = segments[0]
             for end_segment in segments[1:]:
                 distance = np.linalg.norm(
-                    start_segment.location.nd - end_segment.location.nd) * pq.meter
+                    start_segment.location.nd - end_segment.location.nd)
                 cluster_distance += distance
 
             travel_delay += cluster_distance / speed
@@ -197,7 +197,7 @@ class FOCUSRunner(object):
         :rtype: pq.second
         """
 
-        latency = np.sum([self.tour_time(c) for c in clusters]) * pq.second
+        latency = np.sum([self.tour_time(c) for c in clusters])
         return latency
 
     def tour_time(self, cluster):
@@ -209,8 +209,8 @@ class FOCUSRunner(object):
         :rtype: pq.second
         """
 
-        if np.all(np.isclose(cluster.mdc_speed.magnitude, 0.)):
-            travel_time = 0. * pq.second
+        if np.all(np.isclose(cluster.mdc_speed, 0.)):
+            travel_time = 0.
         else:
             travel_time = cluster.tour_length / cluster.mdc_speed
 
@@ -231,7 +231,7 @@ class FOCUSRunner(object):
         for clust in self.sim.clusters:
             energy.append(self.energy_model.total_energy(clust.cluster_id))
 
-        balance = np.std(energy) * pq.J
+        balance = np.std(energy)
         return balance
 
     def average_energy(self):
@@ -244,7 +244,7 @@ class FOCUSRunner(object):
         for clust in self.sim.clusters:
             energy.append(self.energy_model.total_energy(clust.cluster_id))
 
-        average = np.mean(energy) * pq.J
+        average = np.mean(energy)
         return average
 
     def max_buffer_size(self):
@@ -255,5 +255,5 @@ class FOCUSRunner(object):
                 cluster.cluster_id, intercluster_only=False)
             data_volumes.append(volume)
 
-        max_data_volume = np.max(data_volumes) * pq.bit
+        max_data_volume = np.max(data_volumes)
         return max_data_volume
