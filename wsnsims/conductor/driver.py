@@ -20,7 +20,7 @@ from wsnsims.focus.focus_sim import FOCUS
 logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger(__name__)
 
-RUNS = 30
+RUNS = 50
 WAIT_TIME = 100
 
 Parameters = namedtuple('Parameters',
@@ -234,10 +234,15 @@ def run(parameters):
                     logger.exception('FOCUS Exception')
                     continue
 
-    mean_tocs_results = average_results(tocs_results[:RUNS])
-    mean_flower_results = average_results(flower_results[:RUNS])
-    mean_minds_results = average_results(minds_results[:RUNS])
-    mean_focus_results = average_results(focus_results[:RUNS])
+    # mean_tocs_results = average_results(tocs_results[:RUNS])
+    # mean_flower_results = average_results(flower_results[:RUNS])
+    # mean_minds_results = average_results(minds_results[:RUNS])
+    # mean_focus_results = average_results(focus_results[:RUNS])
+
+    mean_tocs_results = tocs_results[:RUNS]
+    mean_flower_results = flower_results[:RUNS]
+    mean_minds_results = minds_results[:RUNS]
+    mean_focus_results = focus_results[:RUNS]
 
     return (mean_tocs_results, mean_flower_results, mean_minds_results,
             mean_focus_results)
@@ -291,25 +296,29 @@ def main():
         for parameter in parameters:
             tocs_res, flower_res, minds_res, focus_res = run(parameter)
 
-            # noinspection PyProtectedMember,PyProtectedMember
-            tocs_writer.writerow(
-                {**tocs_res._asdict(), **parameter._asdict()})
-            tocs_csv.flush()
+            for res in tocs_res:
+                # noinspection PyProtectedMember,PyProtectedMember
+                tocs_writer.writerow(
+                    {**res._asdict(), **parameter._asdict()})
+                tocs_csv.flush()
 
-            # noinspection PyProtectedMember,PyProtectedMember
-            flower_writer.writerow(
-                {**flower_res._asdict(), **parameter._asdict()})
-            flower_csv.flush()
+            for res in flower_res:
+                # noinspection PyProtectedMember,PyProtectedMember
+                flower_writer.writerow(
+                    {**res._asdict(), **parameter._asdict()})
+                flower_csv.flush()
 
-            # noinspection PyProtectedMember,PyProtectedMember
-            minds_writer.writerow(
-                {**minds_res._asdict(), **parameter._asdict()})
-            minds_csv.flush()
+            for res in minds_res:
+                # noinspection PyProtectedMember,PyProtectedMember
+                minds_writer.writerow(
+                    {**res._asdict(), **parameter._asdict()})
+                minds_csv.flush()
 
-            # noinspection PyProtectedMember,PyProtectedMember
-            focus_writer.writerow(
-                {**focus_res._asdict(), **parameter._asdict()})
-            focus_csv.flush()
+            for res in focus_res:
+                # noinspection PyProtectedMember,PyProtectedMember
+                focus_writer.writerow(
+                    {**res._asdict(), **parameter._asdict()})
+                focus_csv.flush()
 
     finish = time.time()
     delta = finish - start

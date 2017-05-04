@@ -1,11 +1,11 @@
 class Environment(object):
     def __init__(self):
         # Common things to change
-        self.mdc_count = 5
-        self.segment_count = 12
-        self.comms_range = 100.  # meters
-        self.isdva = 10.  # megabit
+        self.segment_count = 30
+        self.mdc_count = 9
+        self.isdva = 4.  # megabit
         self.isdvsd = 3.
+        self.comms_range = 100.  # meters
 
         # Used for computing movement energy use
         self.move_cost = 1.  # * pq.J / pq.m

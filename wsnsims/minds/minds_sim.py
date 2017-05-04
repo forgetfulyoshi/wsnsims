@@ -280,9 +280,9 @@ def main():
     # seed = 1484764250
     # env.segment_count = 12
     # env.mdc_count = 5
+
     seed = 1487736569
-    env.isdva = 10.  # * pq.mebi * pq.bit
-    # env.comms_range = 300 * pq.meter
+    env.comms_range = 125
 
     # Specific testing ...
     # seed = 1483676009  # center has in-degree of 3

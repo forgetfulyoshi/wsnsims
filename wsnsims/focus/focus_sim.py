@@ -215,16 +215,15 @@ class FOCUS(object):
 
 def main():
     env = Environment()
-    # seed = int(time.time())
+    seed = int(time.time())
 
     # General testing ...
     # seed = 1484764250
     # env.segment_count = 12
     # env.mdc_count = 5
 
-    seed = 1487736569
-    env.isdva = 10.  # * pq.mebi * pq.bit
-    # env.comms_range = 300 * pq.meter
+    # seed = 1487736569
+    env.comms_range = 125
 
     logger.debug("Random seed is %s", seed)
     np.random.seed(seed)
