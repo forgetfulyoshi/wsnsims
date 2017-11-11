@@ -1,19 +1,17 @@
 import logging
-import time
 import typing
 
 import matplotlib.pyplot as plt
 import numpy as np
-
-from wsnsims.core import segment, units
-from wsnsims.core.comparisons import much_greater_than
-from wsnsims.core.environment import Environment
 from matplotlib import path as mp
-from wsnsims.tocs.cluster import ToCSCluster, ToCSCentroid, RelayNode
-from wsnsims.tocs.tocs_runner import ToCSRunner
 
 from wsnsims.core import linalg
+from wsnsims.core import segment
+from wsnsims.core.comparisons import much_greater_than
+from wsnsims.core.environment import Environment
+from wsnsims.tocs.cluster import ToCSCluster, ToCSCentroid, RelayNode
 from wsnsims.tocs.cluster import combine_clusters
+from wsnsims.tocs.tocs_runner import ToCSRunner
 
 logger = logging.getLogger(__name__)
 

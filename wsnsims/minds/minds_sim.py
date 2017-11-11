@@ -1,17 +1,15 @@
 import itertools
 import logging
-import time
 
 import matplotlib.pyplot as plt
 import numpy as np
-
 import scipy.sparse.csgraph as sp
-from wsnsims.core import segment, units
-from wsnsims.core.environment import Environment
-from wsnsims.minds import minds_runner
 from scipy.sparse import csr_matrix
 
 from wsnsims.core import cluster
+from wsnsims.core import segment
+from wsnsims.core.environment import Environment
+from wsnsims.minds import minds_runner
 
 logger = logging.getLogger(__name__)
 

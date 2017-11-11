@@ -5,16 +5,14 @@ import typing
 
 import matplotlib.pyplot as plt
 import numpy as np
-
 import scipy.sparse.csgraph as sp
 import scipy.spatial.distance as sp_dist
-from wsnsims.core import units
-from wsnsims.core.environment import Environment
-from wsnsims.focus.cluster import FOCUSCluster
-from wsnsims.focus.focus_runner import FOCUSRunner
 from pyclustering.cluster.cure import cure as Cure
 
+from wsnsims.core.environment import Environment
 from wsnsims.core.segment import Segment
+from wsnsims.focus.cluster import FOCUSCluster
+from wsnsims.focus.focus_runner import FOCUSRunner
 
 logger = logging.getLogger(__name__)
 

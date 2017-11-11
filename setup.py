@@ -38,8 +38,8 @@ setup(
         'matplotlib',
         'nose',
         'numpy',
+        'pillow',
         'pyclustering',
-        'quantities',
         'scipy',
     ],
 
