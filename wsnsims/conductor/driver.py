@@ -1,3 +1,4 @@
+import argparse
 import csv
 import datetime
 import logging
@@ -12,10 +13,9 @@ from wsnsims.conductor import sim_inputs
 from wsnsims.core.environment import Environment
 from wsnsims.core.results import Results
 from wsnsims.flower.flower_sim import FLOWER
+from wsnsims.focus.focus_sim import FOCUS
 from wsnsims.minds.minds_sim import MINDS
 from wsnsims.tocs.tocs_sim import TOCS
-
-from wsnsims.focus.focus_sim import FOCUS
 
 logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger(__name__)
@@ -248,7 +248,17 @@ def run(parameters):
             mean_focus_results)
 
 
+def get_argparser():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--outdir', '-o', type=os.path.realpath, default='results')
+
+    return parser
+
+
 def main():
+    parser = get_argparser()
+    args = parser.parse_args()
+
     start = time.time()
     seed = int(time.time())
     print("Random seed is %s", seed)
@@ -260,7 +270,7 @@ def main():
     # noinspection PyProtectedMember
     headers += parameters[0]._fields
 
-    results_dir = os.path.join('C:', os.sep, 'results')
+    results_dir = args.outdir
     if not os.path.isdir(results_dir):
         os.makedirs(results_dir)
 
@@ -323,6 +333,7 @@ def main():
     finish = time.time()
     delta = finish - start
     print("Completed simulation in {} seconds".format(delta))
+
 
 if __name__ == '__main__':
     main()
