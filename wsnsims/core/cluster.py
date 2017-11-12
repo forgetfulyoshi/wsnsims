@@ -4,7 +4,7 @@ import logging
 import numpy as np
 
 from wsnsims.core import tour, point
-from wsnsims.core.orderedset import OrderedSet
+from ordered_set import OrderedSet
 
 from wsnsims.core import linalg
 

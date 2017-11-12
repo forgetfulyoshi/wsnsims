@@ -3,7 +3,7 @@ import logging
 
 import numpy as np
 
-from wsnsims.core import orderedset
+import ordered_set as orderedset
 from wsnsims.minds.energy import MINDSEnergyModel
 from wsnsims.minds.movement import MINDSMovementModel
 

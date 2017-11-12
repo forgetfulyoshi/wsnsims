@@ -30,17 +30,18 @@ setup(
         'Programming Language :: Python',
         'Programming Language :: Python :: 3',
         'Programming Language :: Python :: 3.5',
+        'Programming Language :: Python :: 3.6',
         'Topic :: Scientific/Engineering',
     ],
     keywords='wsn federation flower focus minds tocs',
     packages=find_packages(exclude=['doc', 'test']),
     install_requires=[
+        'ordered-set',
         'matplotlib',
         'numpy',
         'pillow',
         'pyclustering',
         'scipy',
     ],
-
 
 )

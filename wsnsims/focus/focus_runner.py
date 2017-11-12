@@ -2,7 +2,7 @@ import logging
 
 import numpy as np
 
-from wsnsims.core import orderedset
+import ordered_set as orderedset
 from wsnsims.focus.energy import FOCUSEnergyModel
 from wsnsims.focus.movement import FOCUSMovementModel
 
