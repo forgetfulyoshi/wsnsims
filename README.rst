@@ -20,6 +20,16 @@ package in a virtual environment.::
     $ git clone https://<projecturl>/wsnsims.git
     $ pip install -e wsnsims
 
+Testing
+=======
+
+We use tox to run all tests. To learn more about tox, visit https://tox.readthedocs.io.
+
+From within the project directory (where the tox.ini file is) do the following::
+
+    $ pip install tox # (if you don't have tox yet)
+    $ tox
+
 Running
 =======
 
@@ -32,3 +42,4 @@ the ``wsnsims`` directory, execute the following.::
 For options, pass in the ``--help`` option::
 
     $ python -m wsnsims.conductor.driver --help
+

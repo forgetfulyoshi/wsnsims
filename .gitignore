@@ -1,5 +1,6 @@
 # Project-specific ignores
 results/
+README.html
 
 # Created by https://www.gitignore.io/api/python,pycharm
 
