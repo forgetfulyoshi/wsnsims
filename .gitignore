@@ -1,3 +1,5 @@
+# Project-specific ignores
+results/
 
 # Created by https://www.gitignore.io/api/python,pycharm
 
