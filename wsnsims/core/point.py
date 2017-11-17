@@ -5,7 +5,9 @@ import numpy as np
 
 class Vec2(object):
     def __init__(self, nd=None):
-        if not isinstance(nd, np.ndarray):
+        if isinstance(nd, list):
+            self.nd = np.array(nd)
+        elif not isinstance(nd, np.ndarray):
             self.nd = np.zeros(2)
         else:
             self.nd = nd
